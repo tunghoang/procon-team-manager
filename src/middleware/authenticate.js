@@ -1,9 +1,9 @@
 const jwt = require("jsonwebtoken");
-let privateKey = process.env.JWT_SECRET_KEY || "secretKey";
-let skipList = ["/skip-route"];
+const privateKey = process.env.JWT_SECRET_KEY || "secretKey";
+const skipList = ["/skip-route", "/team/signin", "/team/signup"];
 
-module.exports = function (req, res, next) {
-  let token =
+const authenticate = (req, res, next) => {
+  const token =
     req.body.token ||
     req.query.token ||
     req.header["x-access-token"] ||
@@ -23,3 +23,14 @@ module.exports = function (req, res, next) {
     });
   }
 };
+
+const requireAdmin = (req, res, next) => {
+  const { is_admin } = req.auth;
+  if (!is_admin) {
+    return res.status(401).send("Require admin");
+  }
+
+  return next();
+};
+
+module.exports = { authenticate, requireAdmin };

@@ -3,8 +3,7 @@ require("./models");
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const { authenticate } = require("./middleware");
-const authRoute = require("./routes/auth");
+const { authenticate } = require("./middleware/authenticate");
 const routes = require("./routes");
 
 const PORT = process.env.PORT || 3000;
@@ -12,7 +11,6 @@ const HOST = process.env.HOST || "localhost";
 
 app.use(express.json());
 app.use(cors());
-app.use("/", authRoute);
 app.use(authenticate);
 
 for (let route in routes) {
