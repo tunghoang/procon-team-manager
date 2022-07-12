@@ -1,15 +1,21 @@
 const { Router } = require("express");
-const { getMatchs, createMatch, getMatch, updateMatch, removeMatch } = require("../controllers/match");
+const {
+  getAnswers,
+  getAnswer,
+  createAnswer,
+  updateAnswer,
+  removeAnswer,
+} = require("../controllers/answer");
+const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 
-router.route('/')
-  .get(getMatchs)
-  .post(createMatch)
+router.route("/").get(getAnswers).post(createAnswer);
 
-router.route('/:id')
-  .get(getMatch)
-  .put(updateMatch)
-  .delete(removeMatch)
+router
+  .route("/:id")
+  .get(getAnswer)
+  .put(requireAdmin, updateAnswer)
+  .delete(requireAdmin, removeAnswer);
 
 module.exports = router;

@@ -27,7 +27,6 @@ const signin = async (req, res) => {
       {
         id: team.id,
         name: team.name,
-        is_admin: team.is_admin,
       },
       process.env.JWT_SECRET_KEY
     );

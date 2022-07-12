@@ -15,7 +15,7 @@ router.route("/").get(getAllTournament).post(requireAdmin, createTournament);
 router
   .route("/:id")
   .get(getTournament)
-  .put(updateTournament)
-  .delete(removeTournament);
+  .put(requireAdmin, updateTournament)
+  .delete(requireAdmin, removeTournament);
 
 module.exports = router;

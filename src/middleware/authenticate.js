@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { Team } = require("../models");
 const privateKey = process.env.JWT_SECRET_KEY || "secretKey";
 const skipList = ["/skip-route", "/team/signin", "/team/signup"];
 
@@ -24,9 +25,11 @@ const authenticate = (req, res, next) => {
   }
 };
 
-const requireAdmin = (req, res, next) => {
-  const { is_admin } = req.auth;
-  if (!is_admin) {
+const requireAdmin = async (req, res, next) => {
+  const { id } = req.auth;
+  const team = await Team.findByPk(id);
+
+  if (!team.is_admin) {
     return res.status(401).send("Require admin");
   }
 

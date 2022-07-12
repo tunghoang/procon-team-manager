@@ -1,43 +1,24 @@
 const { Tournament } = require("../models");
-
+const useController = require("./useController");
+const { getAll, get, update, create, remove } = useController(Tournament);
 const getAllTournament = async (req, res) => {
-  try {
-    console.log(req.auth);
-    const tournaments = await Tournament.findAll();
-
-    return res.status(200).json({ data: tournaments });
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error });
-  }
+  await getAll(req, res);
 };
 const getTournament = async (req, res) => {
-  const { id } = req.parmas;
-  try {
-    const tournament = await Tournament.findByPk(id);
-    return res.status(200).json(tournament);
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error });
-  }
+  await get(req, res);
 };
 
 const createTournament = async (req, res) => {
-  const { name } = req.body;
-  try {
-    const tournament = await Tournament.create({
-      name,
-    });
-    return res.status(200).json(tournament);
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error });
-  }
+  await create(req, res);
 };
 
-const updateTournament = () => {};
+const updateTournament = async (req, res) => {
+  await update(req, res);
+};
 
-const removeTournament = () => {};
+const removeTournament = async (req, res) => {
+  await remove(req, res);
+};
 
 module.exports = {
   getAllTournament,

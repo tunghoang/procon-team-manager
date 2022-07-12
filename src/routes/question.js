@@ -1,15 +1,24 @@
 const { Router } = require("express");
-const { getQuestions, createQuestion, getQuestion, updateQuestion, removeQuestion } = require("../controllers/question");
+const {
+  getQuestions,
+  createQuestion,
+  getQuestion,
+  updateQuestion,
+  removeQuestion,
+} = require("../controllers/question");
+const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 
-router.route('/')
-  .get(getQuestions)
-  .post(createQuestion)
+router
+  .route("/")
+  .get(requireAdmin, getQuestions)
+  .post(requireAdmin, createQuestion);
 
-router.route('/:id')
+router
+  .route("/:id")
   .get(getQuestion)
-  .put(updateQuestion)
-  .delete(removeQuestion)
+  .put(requireAdmin, updateQuestion)
+  .delete(requireAdmin, removeQuestion);
 
 module.exports = router;
