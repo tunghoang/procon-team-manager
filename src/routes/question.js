@@ -5,6 +5,8 @@ const {
   getQuestion,
   updateQuestion,
   removeQuestion,
+  getAudio,
+  getDividedData,
 } = require("../controllers/question");
 const { requireAdmin } = require("../middleware/authenticate");
 
@@ -20,5 +22,9 @@ router
   .get(getQuestion)
   .put(requireAdmin, updateQuestion)
   .delete(requireAdmin, removeQuestion);
+
+router.get("/:id/divided-data", getDividedData);
+
+router.get("/audio/:fileName", getAudio);
 
 module.exports = router;

@@ -2,6 +2,8 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 const { Team } = require("../models");
+const useController = require("./useController");
+const { getAll, get, update, create, remove } = useController(Team);
 
 const signin = async (req, res) => {
   const { account, password } = req.body;
@@ -79,7 +81,31 @@ const signup = async (req, res) => {
   }
 };
 
+const getTeams = async (req, res) => {
+  return await getAll(req, res);
+};
+const getTeam = async (req, res) => {
+  return await get(req, res);
+};
+
+const createTeam = async (req, res) => {
+  return await create(req, res);
+};
+
+const updateTeam = async (req, res) => {
+  return await update(req, res);
+};
+
+const removeTeam = async (req, res) => {
+  return await remove(req, res);
+};
+
 module.exports = {
   signin,
   signup,
+  getTeams,
+  getTeam,
+  createTeam,
+  updateTeam,
+  removeTeam,
 };

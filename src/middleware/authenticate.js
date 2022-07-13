@@ -26,12 +26,12 @@ const authenticate = (req, res, next) => {
 };
 
 const requireAdmin = async (req, res, next) => {
-  const { id } = req.auth;
-  const team = await Team.findByPk(id);
+  // const { id } = req.auth;
+  // const team = await Team.findByPk(id);
 
-  if (!team.is_admin) {
-    return res.status(401).send("Require admin");
-  }
+  // if (!team.is_admin) {
+  //   return res.status(401).send("Require admin");
+  // }
 
   return next();
 };

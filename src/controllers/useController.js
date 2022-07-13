@@ -23,7 +23,9 @@ const useController = (Model) => {
   const create = async (req, res) => {
     try {
       const data = await Model.create(req.body);
-      return res.status(200).json(data);
+      return res.status(200).json({
+        id: data.id,
+      });
     } catch (error) {
       console.log(error);
       return res.status(500).json({ error });
@@ -40,7 +42,7 @@ const useController = (Model) => {
         });
       }
       await data.update(req.body);
-      return res.status(200).json(data);
+      return res.status(200).json();
     } catch (error) {
       console.log(error);
       return res.status(500).json({ error });
@@ -52,7 +54,7 @@ const useController = (Model) => {
     try {
       const data = await Model.findByPk(id);
       await data.destroy();
-      return res.status(200).json(data);
+      return res.status(200).json();
     } catch (error) {
       console.log(error);
       return res.status(500).json({ error });

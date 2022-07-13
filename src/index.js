@@ -11,7 +11,7 @@ const HOST = process.env.HOST || "localhost";
 
 app.use(express.json());
 app.use(cors());
-app.use(authenticate);
+// app.use(authenticate);
 
 for (let route in routes) {
   app.use(route, routes[route]);
