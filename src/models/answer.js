@@ -13,14 +13,20 @@ Answer.init(
     answer_data: {
       type: DataTypes.TEXT,
     },
-    score: {
-      type: DataTypes.DECIMAL(10, 2),
+    score_data: {
+      // type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.TEXT,
     },
   },
   {
     sequelize,
     modelName: "Answer",
     tableName: "answer",
+    uniqueKeys: {
+      Items_unique: {
+        fields: ["team_id", "question_id"],
+      },
+    },
   }
 );
 

@@ -1,6 +1,6 @@
 const { Router } = require("express");
 const {
-  getAllTournament,
+  getTournaments,
   getTournament,
   createTournament,
   updateTournament,
@@ -10,7 +10,7 @@ const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 
-router.route("/").get(getAllTournament).post(requireAdmin, createTournament);
+router.route("/").get(getTournaments).post(requireAdmin, createTournament);
 
 router
   .route("/:id")

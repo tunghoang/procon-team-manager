@@ -15,7 +15,7 @@ router.route("/").get(getAnswers).post(createAnswer);
 router
   .route("/:id")
   .get(getAnswer)
-  .put(requireAdmin, updateAnswer)
+  .put(updateAnswer)
   .delete(requireAdmin, removeAnswer);
 
 module.exports = router;

@@ -59,7 +59,7 @@ const signup = async (req, res) => {
       },
     });
     if (team) {
-      return res.status(400).json({ error: `${name} has already existed` });
+      return res.status(400).json({ error: `Account has already existed` });
     }
     const saltRounds = 10;
     bcrypt.hash(String(password), saltRounds, async (error, hash_password) => {
@@ -73,7 +73,7 @@ const signup = async (req, res) => {
         password: hash_password,
       });
       newTeam.password = undefined;
-      return res.status(201).json({ team: newTeam });
+      return res.status(200).json();
     });
   } catch (error) {
     console.log(error);
@@ -82,22 +82,23 @@ const signup = async (req, res) => {
 };
 
 const getTeams = async (req, res) => {
-  return await getAll(req, res);
+  req.query.match_id = req.auth.id;
+  await getAll(req, res);
 };
 const getTeam = async (req, res) => {
-  return await get(req, res);
+  await get(req, res);
 };
 
 const createTeam = async (req, res) => {
-  return await create(req, res);
+  await create(req, res);
 };
 
 const updateTeam = async (req, res) => {
-  return await update(req, res);
+  await update(req, res);
 };
 
 const removeTeam = async (req, res) => {
-  return await remove(req, res);
+  await remove(req, res);
 };
 
 module.exports = {
