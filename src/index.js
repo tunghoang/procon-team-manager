@@ -3,7 +3,7 @@ require("./models");
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const { authenticate, validateAccount } = require("./middleware/authenticate");
+const { authenticate, validateTeam } = require("./middleware/authenticate");
 const routes = require("./routes");
 
 const PORT = process.env.PORT || 3000;
@@ -11,8 +11,8 @@ const HOST = process.env.HOST || "localhost";
 
 app.use(express.json());
 app.use(cors());
-app.use(authenticate);
-app.use(validateAccount);
+// app.use(authenticate);
+// app.use(validateTeam);
 
 for (let route in routes) {
   app.use(route, routes[route]);

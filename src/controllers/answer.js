@@ -1,13 +1,16 @@
 const got = require("got");
 const { Answer, Question } = require("../models");
-const useController = require("./useController");
+const useController = require("../lib/useController");
 const { getAll, get, create, remove } = useController(Answer);
 const getAnswers = async (req, res) => {
-  req.query.match_team_id = req.auth.id;
   await getAll(req, res);
 };
 const getAnswer = async (req, res) => {
   await get(req, res);
+};
+
+const removeAnswer = async (req, res) => {
+  await remove(req, res);
 };
 
 const createAnswer = async (req, res) => {
@@ -16,7 +19,7 @@ const createAnswer = async (req, res) => {
     const { question_id, answer_data } = req.body;
     const question = await Question.findByPk(question_id);
     if (!question) {
-      return res.status(400).json({ error: "Question not found" });
+      return res.status(400).json({ message: "Question not found" });
     }
     const questionData = JSON.parse(question.question_data);
     const response = await got
@@ -33,23 +36,24 @@ const createAnswer = async (req, res) => {
     req.body.team_id = teamId;
     await create(req, res);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
 const updateAnswer = async (req, res) => {
   try {
-    const teamId = req.auth.id;
+    const { id: teamId, is_admin } = req.auth;
     const { id } = req.params;
     const { answer_data } = req.body;
 
     const answer = await Answer.findByPk(id);
-    if (!answer) return res.status(400).json({ error: "Answer not found" });
-    if (answer.team_id !== teamId)
-      return res.status(400).json({ error: "Not permited" });
+    if (!answer) return res.status(400).json({ message: "Answer not found" });
+    if (!is_admin && answer.team_id !== teamId)
+      return res.status(405).json({ message: "Not permited" });
 
     const question = await Question.findByPk(answer.question_id);
-    if (!question) return res.status(400).json({ error: "Question not found" });
+    if (!question)
+      return res.status(400).json({ message: "Question not found" });
 
     const questionData = JSON.parse(question.question_data);
     const response = await got
@@ -70,10 +74,6 @@ const updateAnswer = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
-};
-
-const removeAnswer = async (req, res) => {
-  await remove(req, res);
 };
 
 module.exports = {

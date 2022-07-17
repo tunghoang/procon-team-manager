@@ -1,10 +1,41 @@
 const got = require("got");
 const Question = require("../models/question");
-const useController = require("./useController");
+const useController = require("../lib/useController");
+const { Match } = require("../models");
 const { getAll, get, update, create, remove } = useController(Question);
 
 const getQuestions = async (req, res) => {
-  await getAll(req, res);
+  // await getAll(req, res);
+  try {
+    const query = req.query;
+    const filter = Object.keys(query).reduce((cur, qKey) => {
+      if (qKey.substring(0, 6) === "match_") {
+        const value = query[qKey];
+        const key = qKey.slice(6);
+        return {
+          ...cur,
+          [key]: filterFields.includes(key)
+            ? { [Op.like]: `%${value}%` }
+            : value,
+        };
+      }
+      return cur;
+    }, {});
+
+    const data = await Question.findAll({
+      where: filter,
+      include: [
+        {
+          model: Match,
+          as: "match",
+        },
+      ],
+    });
+
+    return res.status(200).json({ data });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const getQuestion = async (req, res) => {
@@ -32,7 +63,7 @@ const createQuestion = async (req, res) => {
   }
 };
 
-const getAudio = async (req, res) => {
+const getAudioFile = async (req, res) => {
   try {
     const { fileName } = req.params;
     const audioUrl = `${process.env.SERVICE_API}/audio/${fileName}`;
@@ -49,7 +80,7 @@ const createDividedData = async (req, res) => {
     const { n_divided } = req.body;
     const question = await Question.findByPk(id);
     if (!question) {
-      return res.status(400).json({ error: "Question not found" });
+      return res.status(404).json({ error: "Question not found" });
     }
 
     if (n_divided < 1 || n_divided > 5) {
@@ -78,6 +109,6 @@ module.exports = {
   createQuestion,
   updateQuestion,
   removeQuestion,
-  getAudio,
+  getAudioFile,
   createDividedData,
 };

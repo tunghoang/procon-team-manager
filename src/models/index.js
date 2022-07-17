@@ -4,11 +4,21 @@ const Tournament = require("./tournament");
 const Match = require("./match");
 const Question = require("./question");
 const Answer = require("./answer");
+const Round = require("./round");
 
-Tournament.hasMany(Match, {
-  as: "matchs",
+Tournament.hasMany(Round, {
+  as: "rounds",
   foreignKey: {
     name: "tournament_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
+Round.hasMany(Match, {
+  as: "matches",
+  foreignKey: {
+    name: "round_id",
     allowNull: false,
   },
   onDelete: "cascade",
@@ -23,9 +33,19 @@ Match.hasMany(Question, {
   onDelete: "cascade",
 });
 
+Question.belongsTo(Match, {
+  as: "match",
+  foreignKey: {
+    name: "match_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
 Match.belongsToMany(Team, {
   through: "team_match",
   foreignKey: "match_id",
+  as: "teams",
 });
 
 Team.belongsToMany(Match, {

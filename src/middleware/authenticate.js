@@ -19,7 +19,7 @@ const authenticate = (req, res, next) => {
     req.auth = {};
     next();
   } else {
-    jwt.verify(token, privateKey, function (err, decoded) {
+    jwt.verify(token, privateKey, async function (err, decoded) {
       if (err) {
         return res.status(401).json({ error: "Unauthorized" });
       } else {
@@ -30,27 +30,18 @@ const authenticate = (req, res, next) => {
   }
 };
 
+const validateTeam = async (req, res, next) => {
+  const team = await Team.findByPk(req.auth.id);
+  if (!team) return res.status(404).json({ error: "Team not found" });
+  req.auth.is_admin = team.is_admin;
+};
+
 const requireAdmin = async (req, res, next) => {
-  if (!req.auth.is_admin) {
-    return res.status(401).json({ error: "Require admin" });
-  }
+  // if (!req.auth.is_admin) {
+  //   return res.status(405).json({ error: "Required admin" });
+  // }
 
   next();
 };
 
-const validateAccount = async (req, res, next) => {
-  if (new RegExp(skipList.join("|")).test(req.originalUrl)) {
-    req.auth = {};
-  } else {
-    const { id } = req.auth;
-    const team = await Team.findByPk(id);
-    if (!team) {
-      return res.status(401).json({ error: "Team unauthorized" });
-    }
-    req.auth.is_admin = team.is_admin;
-  }
-
-  next();
-};
-
-module.exports = { authenticate, requireAdmin, validateAccount };
+module.exports = { authenticate, requireAdmin, validateTeam };

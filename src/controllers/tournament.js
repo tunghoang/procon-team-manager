@@ -1,5 +1,5 @@
 const { Tournament } = require("../models");
-const useController = require("./useController");
+const useController = require("../lib/useController");
 const { getAll, get, update, create, remove } = useController(Tournament);
 const getTournaments = async (req, res) => {
   await getAll(req, res);

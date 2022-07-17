@@ -1,6 +1,6 @@
 const { Router } = require("express");
 const {
-  getMatchs,
+  getMatches,
   createMatch,
   getMatch,
   updateMatch,
@@ -10,7 +10,7 @@ const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 
-router.route("/").get(getMatchs).post(requireAdmin, createMatch);
+router.route("/").get(getMatches).post(requireAdmin, createMatch);
 
 router
   .route("/:id")

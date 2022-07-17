@@ -2,29 +2,46 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 const { Team } = require("../models");
-const useController = require("./useController");
+const { comparePassword, encryptPassword } = require("../lib/encrypt");
+const useController = require("../lib/useController");
 const { getAll, get, update, create, remove } = useController(Team);
+
+const getTeams = async (req, res) => {
+  const ignore = ["password"];
+  await getAll(req, res, ignore);
+};
+const getTeam = async (req, res) => {
+  const ignore = ["password"];
+  await get(req, res, ignore);
+};
+
+const updateTeam = async (req, res) => {
+  try {
+    req.body.password =
+      req.body.password && (await encryptPassword(req.body.password));
+    await update(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const removeTeam = async (req, res) => {
+  await remove(req, res);
+};
 
 const signin = async (req, res) => {
   const { account, password } = req.body;
   try {
     const team = await Team.findOne({
-      where: {
-        account,
-      },
+      where: { account },
     });
-    if (!team) {
-      return res.status(401).json({ error: "Account not found" });
-    }
-    const isPasswordMatch = await bcrypt.compare(
-      String(password),
-      team.password
-    );
-    if (!isPasswordMatch) {
+    if (!team) return res.status(404).json({ message: "Account not found" });
+    const isMatch = await comparePassword(password, team.password);
+    if (!isMatch)
       return res
-        .status(401)
-        .json({ error: "Account and Password haven't matched" });
-    }
+        .status(400)
+        .json({ message: "Account and Password haven't matched" });
+
     const token = jwt.sign(
       {
         id: team.id,
@@ -34,79 +51,40 @@ const signin = async (req, res) => {
     );
 
     return res.status(200).json({
-      token,
+      id: team.id,
       name: team.name,
+      token,
     });
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error });
+    return res.status(500).json({ message: error.message });
   }
-};
-
-const signup = async (req, res) => {
-  const { name, account, password } = req.body;
-  try {
-    const team = await Team.findOne({
-      where: {
-        [Op.or]: [
-          {
-            account,
-          },
-          {
-            name,
-          },
-        ],
-      },
-    });
-    if (team) {
-      return res.status(400).json({ error: `Account has already existed` });
-    }
-    const saltRounds = 10;
-    bcrypt.hash(String(password), saltRounds, async (error, hash_password) => {
-      if (error) {
-        console.log(error);
-        return res.status(400).json({ error });
-      }
-      const newTeam = await Team.create({
-        name,
-        account,
-        password: hash_password,
-      });
-      newTeam.password = undefined;
-      return res.status(200).json();
-    });
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error });
-  }
-};
-
-const getTeams = async (req, res) => {
-  req.query.match_id = req.auth.id;
-  await getAll(req, res);
-};
-const getTeam = async (req, res) => {
-  await get(req, res);
 };
 
 const createTeam = async (req, res) => {
-  await create(req, res);
-};
+  try {
+    const team = await Team.findOne({
+      where: {
+        [Op.or]: [{ account: req.body.account }, { name: req.body.name }],
+      },
+    });
+    if (team)
+      return res
+        .status(400)
+        .json({ message: `Account or Name has already existed` });
 
-const updateTeam = async (req, res) => {
-  await update(req, res);
-};
-
-const removeTeam = async (req, res) => {
-  await remove(req, res);
+    req.body.password = await encryptPassword(req.body.password);
+    if (!req.auth?.is_admin) req.body.is_admin = false;
+    await create(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 module.exports = {
   signin,
-  signup,
+  createTeam,
   getTeams,
   getTeam,
-  createTeam,
   updateTeam,
   removeTeam,
 };
