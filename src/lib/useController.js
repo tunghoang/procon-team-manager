@@ -1,26 +1,14 @@
 const { Op } = require("sequelize");
-const filterFields = ["name", "description"];
-const useController = (Model) => {
-  const getAll = async (req, res, ignore = []) => {
-    try {
-      const query = req.query;
-      const filter = Object.keys(query).reduce((cur, qKey) => {
-        if (qKey.substring(0, 6) === "match_") {
-          const value = query[qKey];
-          const key = qKey.slice(6);
-          return {
-            ...cur,
-            [key]: filterFields.includes(key)
-              ? { [Op.like]: `%${value}%` }
-              : value,
-          };
-        }
-        return cur;
-      }, {});
+const { getFilter } = require("./common");
 
+const useController = (Model) => {
+  const getAll = async (req, res, ignore = [], include) => {
+    try {
+      const filter = getFilter(req.query);
       const data = await Model.findAll({
         where: filter,
         attributes: { exclude: ignore },
+        include,
       });
 
       return res.status(200).json({ data });

@@ -1,41 +1,17 @@
 const got = require("got");
-const Question = require("../models/question");
 const useController = require("../lib/useController");
-const { Match } = require("../models");
+const { Match, Question } = require("../models");
 const { getAll, get, update, create, remove } = useController(Question);
 
 const getQuestions = async (req, res) => {
-  // await getAll(req, res);
-  try {
-    const query = req.query;
-    const filter = Object.keys(query).reduce((cur, qKey) => {
-      if (qKey.substring(0, 6) === "match_") {
-        const value = query[qKey];
-        const key = qKey.slice(6);
-        return {
-          ...cur,
-          [key]: filterFields.includes(key)
-            ? { [Op.like]: `%${value}%` }
-            : value,
-        };
-      }
-      return cur;
-    }, {});
-
-    const data = await Question.findAll({
-      where: filter,
-      include: [
-        {
-          model: Match,
-          as: "match",
-        },
-      ],
-    });
-
-    return res.status(200).json({ data });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
+  const ignore = [];
+  const include = [
+    {
+      model: Match,
+      as: "match",
+    },
+  ];
+  await getAll(req, res, ignore, include);
 };
 
 const getQuestion = async (req, res) => {
