@@ -28,18 +28,14 @@ Match.hasMany(Question, {
   as: "questions",
   foreignKey: {
     name: "match_id",
-    allowNull: false,
   },
-  onDelete: "cascade",
 });
 
 Question.belongsTo(Match, {
   as: "match",
   foreignKey: {
     name: "match_id",
-    allowNull: false,
   },
-  onDelete: "cascade",
 });
 
 Match.belongsToMany(Team, {
