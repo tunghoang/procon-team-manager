@@ -2,7 +2,7 @@ const { Op } = require("sequelize");
 const { getFilter } = require("./common");
 
 const useController = (Model) => {
-  const getAll = async (req, res, ignore = [], include) => {
+  const getAll = async (req, res, ignore, include) => {
     try {
       const filter = getFilter(req.query);
       const data = await Model.findAll({
@@ -13,15 +13,20 @@ const useController = (Model) => {
 
       return res.status(200).json({ data });
     } catch (error) {
+      console.log(error);
       return res.status(500).json({ message: error.message });
     }
   };
-  const get = async (req, res, ignore = []) => {
-    const id = req.params.id || req.fields?.id;
+  const get = async (req, res, ignore, include) => {
+    const id = req.params.id;
+    const filter = getFilter(req.query);
     try {
       const data = await Model.findByPk(id, {
+        where: filter,
         attributes: { exclude: ignore },
+        include,
       });
+
       if (!data) {
         return res.status(404).json({
           message: `${Model.name} not found`,
@@ -45,7 +50,7 @@ const useController = (Model) => {
   };
 
   const update = async (req, res) => {
-    const id = req.params.id || req.fields?.id;
+    const id = req.params.id;
     try {
       const data = await Model.findByPk(id);
       if (!data) {
@@ -63,7 +68,7 @@ const useController = (Model) => {
   };
 
   const remove = async (req, res) => {
-    const id = req.params.id || req.fields?.id;
+    const id = req.params.id;
     try {
       const data = await Model.findByPk(id);
       if (!data) {

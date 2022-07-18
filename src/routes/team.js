@@ -8,15 +8,14 @@ const {
   updateTeam,
   removeTeam,
 } = require("../controllers/team");
-const { changeRequest, restrictEditMe } = require("../middleware/team");
 
 const router = Router();
 
 router.post("/signin", signin);
 router.post("/signup", createTeam);
 
-router.all("/me", changeRequest);
-router.route("/me").get(getTeam).put(restrictEditMe, updateTeam);
+router.route("/").get(getTeams);
+router.route("/:id").get(getTeam).put(updateTeam);
 
 router.all("*", requireAdmin);
 router.route("/").get(getTeams).post(createTeam);

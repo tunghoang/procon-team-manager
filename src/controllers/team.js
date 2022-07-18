@@ -7,15 +7,28 @@ const { getAll, get, update, create, remove } = useController(Team);
 
 const getTeams = async (req, res) => {
   const ignore = ["password"];
+  if (!req.auth.is_admin) req.query.match_id = req.auth.id;
   await getAll(req, res, ignore);
 };
 const getTeam = async (req, res) => {
   const ignore = ["password"];
+  if (req.params.id != req.auth.id) {
+    return res.status(405).json({ message: "Not allowed" });
+  }
   await get(req, res, ignore);
 };
 
 const updateTeam = async (req, res) => {
   try {
+    if (req.params.id != req.auth.id) {
+      return res.status(405).json({ message: "Not allowed" });
+    }
+    if (!req.auth.is_admin) {
+      req.body = {
+        name: req.body.name,
+        password: req.body.password,
+      };
+    }
     req.body.password =
       req.body.password && (await encryptPassword(req.body.password));
     await update(req, res);

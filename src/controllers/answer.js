@@ -1,12 +1,25 @@
 const got = require("got");
-const { Answer, Question } = require("../models");
+const { Answer, Question, Team } = require("../models");
 const useController = require("../lib/useController");
 const { getAll, get, create, remove } = useController(Answer);
+
+const includeGet = [
+  {
+    model: Question,
+    as: "question",
+  },
+  {
+    model: Team,
+    as: "team",
+  },
+];
 const getAnswers = async (req, res) => {
-  await getAll(req, res);
+  if (!req.auth.is_admin) req.query.match_team_id = req.auth.id;
+  await getAll(req, res, null, includeGet);
 };
 const getAnswer = async (req, res) => {
-  await get(req, res);
+  if (!req.auth.is_admin) req.query.match_team_id = req.auth.id;
+  await get(req, res, null, includeGet);
 };
 
 const removeAnswer = async (req, res) => {
@@ -15,7 +28,7 @@ const removeAnswer = async (req, res) => {
 
 const createAnswer = async (req, res) => {
   try {
-    const teamId = req.auth?.id || 1;
+    const teamId = req.auth.is_admin ? req.body.team_id : req.auth.id;
     const { question_id, answer_data } = req.body;
     const question = await Question.findByPk(question_id);
     if (!question) {
@@ -27,6 +40,7 @@ const createAnswer = async (req, res) => {
         json: {
           question_uuid: questionData.question_uuid,
           answer_data,
+          team_id: teamId,
         },
       })
       .json();
@@ -43,10 +57,10 @@ const createAnswer = async (req, res) => {
 const updateAnswer = async (req, res) => {
   try {
     const { id: teamId, is_admin } = req.auth;
-    const { id } = req.params;
+    const { id: answerId } = req.params;
     const { answer_data } = req.body;
 
-    const answer = await Answer.findByPk(id);
+    const answer = await Answer.findByPk(answerId);
     if (!answer) return res.status(400).json({ message: "Answer not found" });
     if (!is_admin && answer.team_id !== teamId)
       return res.status(405).json({ message: "Not permited" });
@@ -61,6 +75,7 @@ const updateAnswer = async (req, res) => {
         json: {
           question_uuid: questionData.question_uuid,
           answer_data,
+          team_id: teamId,
         },
       })
       .json();

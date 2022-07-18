@@ -58,6 +58,15 @@ Team.hasMany(Answer, {
   onDelete: "cascade",
 });
 
+Answer.belongsTo(Team, {
+  as: "team",
+  foreignKey: {
+    name: "team_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
 Answer.belongsTo(Question, {
   as: "question",
   foreignKey: {
