@@ -10,12 +10,11 @@ const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 
-router.route("/").get(getTournaments).post(requireAdmin, createTournament);
+router.route("/").get(getTournaments);
+router.route("/:id").get(getTournament);
 
-router
-  .route("/:id")
-  .get(getTournament)
-  .put(requireAdmin, updateTournament)
-  .delete(requireAdmin, removeTournament);
+router.all("*", requireAdmin);
+router.route("/").post(requireAdmin, createTournament);
+router.route("/:id").put(updateTournament).delete(removeTournament);
 
 module.exports = router;

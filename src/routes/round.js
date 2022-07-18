@@ -10,12 +10,11 @@ const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 
-router.route("/").get(getRounds).post(requireAdmin, createRound);
+router.route("/").get(getRounds);
+router.route("/:id").get(getRound);
 
-router
-  .route("/:id")
-  .get(getRound)
-  .put(requireAdmin, updateRound)
-  .delete(requireAdmin, removeRound);
+router.all("*", requireAdmin);
+router.route("/").post(createRound);
+router.route("/:id").put(updateRound).delete(removeRound);
 
 module.exports = router;

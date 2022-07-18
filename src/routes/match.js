@@ -5,17 +5,24 @@ const {
   getMatch,
   updateMatch,
   removeMatch,
+  removeTeamMatch,
+  createTeamMatch,
 } = require("../controllers/match");
 const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 
-router.route("/").get(getMatches).post(requireAdmin, createMatch);
+router.route("/").get(getMatches);
+router.route("/:id").get(getMatch);
+
+router.all("*", requireAdmin);
+
+router.route("/").post(createMatch);
+router.route("/:id").put(updateMatch).delete(removeMatch);
 
 router
-  .route("/:id")
-  .get(getMatch)
-  .put(requireAdmin, updateMatch)
-  .delete(requireAdmin, removeMatch);
+  .route("/:matchId/team/:teamId")
+  .post(createTeamMatch)
+  .delete(removeTeamMatch);
 
 module.exports = router;
