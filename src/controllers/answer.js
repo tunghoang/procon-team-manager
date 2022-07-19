@@ -34,6 +34,13 @@ const createAnswer = async (req, res) => {
     if (!question) {
       return res.status(400).json({ message: "Question not found" });
     }
+    const answer = await Answer.findOne({
+      where: {
+        team_id: teamId,
+        question_id,
+      },
+    });
+    if (answer) return res.status(400).json({ message: "Answer exsited" });
     const questionData = JSON.parse(question.question_data);
     const response = await got
       .post(`${process.env.SERVICE_API}/answer-data`, {
@@ -79,13 +86,15 @@ const updateAnswer = async (req, res) => {
         },
       })
       .json();
-    console.log("score update", response);
+    console.log("score update", response, answer_data);
 
     await answer.update({
       score_data: JSON.stringify(response),
       answer_data: JSON.stringify(answer_data),
     });
-    return res.status(200).json();
+    return res.status(200).json({
+      id: answer.id,
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
