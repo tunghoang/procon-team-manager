@@ -29,6 +29,11 @@ Question.init(
     sequelize,
     modelName: "Question",
     tableName: "question",
+    uniqueKeys: {
+      Items_unique: {
+        fields: ["name", "match_id"],
+      },
+    },
   }
 );
 

@@ -1,12 +1,18 @@
 const got = require("got");
-const { Answer, Question, Team } = require("../models");
+const { Answer, Question, Team, Match } = require("../models");
 const useController = require("../lib/useController");
 const { getAll, get, create, remove } = useController(Answer);
 
-const includeGet = [
+const includes = [
   {
     model: Question,
     as: "question",
+    include: [
+      {
+        model: Match,
+        as: "match",
+      },
+    ],
   },
   {
     model: Team,
@@ -15,11 +21,11 @@ const includeGet = [
 ];
 const getAnswers = async (req, res) => {
   if (!req.auth.is_admin) req.query.match_team_id = req.auth.id;
-  await getAll(req, res, null, includeGet);
+  await getAll(req, res, null, includes);
 };
 const getAnswer = async (req, res) => {
   if (!req.auth.is_admin) req.query.match_team_id = req.auth.id;
-  await get(req, res, null, includeGet);
+  await get(req, res, null, includes);
 };
 
 const removeAnswer = async (req, res) => {
