@@ -1,4 +1,3 @@
-const { Op } = require("sequelize");
 const { getFilter } = require("./common");
 
 const useController = (Model) => {

@@ -1,3 +1,5 @@
+const { Op } = require("sequelize");
+
 const getFilter = (query) => {
   const filterFields = ["name", "description"];
   return Object.keys(query).reduce((cur, qKey) => {
