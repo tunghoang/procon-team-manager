@@ -34,8 +34,7 @@ const createQuestion = async (req, res) => {
     req.body.question_data = JSON.stringify(response);
     await create(req, res);
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -45,28 +44,29 @@ const getAudioFile = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/audio/${fileName}`;
     return got.stream(audioUrl).pipe(res);
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error });
+    return res.status(500).json({ message: error.message });
   }
 };
 
 const createDividedData = async (req, res) => {
   try {
     const { id } = req.params;
-    const { n_divided } = req.body;
+    const n_divided = Number(req.body.n_divided);
+    const { id: teamId } = req.auth;
     const question = await Question.findByPk(id);
     if (!question) {
-      return res.status(404).json({ error: "Question not found" });
+      return res.status(404).json({ message: "Question not found" });
     }
 
-    if (n_divided < 1 || n_divided > 5) {
-      throw new Error("Number of divided data required >= 1 and <= 5");
+    if (!n_divided || n_divided < 2 || n_divided > 5) {
+      throw new Error("Number of divided data required >= 2 and <= 5");
     }
     const questionData = JSON.parse(question.question_data);
 
     const response = await got
       .post(`${process.env.SERVICE_API}/divided-data`, {
         json: {
+          team_id: teamId,
           n_divided,
           question_uuid: questionData.question_uuid,
         },
@@ -74,8 +74,7 @@ const createDividedData = async (req, res) => {
       .json();
     return res.status(200).json({ data: response });
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 

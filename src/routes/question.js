@@ -5,7 +5,6 @@ const {
   getQuestion,
   updateQuestion,
   removeQuestion,
-  getAudioFile,
   createDividedData,
 } = require("../controllers/question");
 const { requireAdmin } = require("../middleware/authenticate");
@@ -14,7 +13,6 @@ const router = Router();
 router.route("/").get(getQuestions);
 router.route("/:id").get(getQuestion);
 router.post("/:id/divided-data", createDividedData);
-// router.get("/audio/:fileName", getAudioFile);
 
 router.all("*", requireAdmin);
 router.route("/").post(createQuestion);
