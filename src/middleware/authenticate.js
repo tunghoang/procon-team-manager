@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const { Team } = require("../models");
 const privateKey = process.env.JWT_SECRET_KEY || "secretKey";
-const skipList = ["/skip-route", "/team/signin", "/team/signup", "/audio/*"];
+const skipList = ["/skip-route", "/team/signin", "/team/signup"];
 
 const authenticate = (req, res, next) => {
   const token =

@@ -78,10 +78,6 @@ const updateAnswer = async (req, res) => {
     if (!is_admin && answer.team_id !== teamId)
       return res.status(405).json({ message: "Not permited" });
 
-    const question = await Question.findByPk(answer.question_id);
-    if (!question)
-      return res.status(400).json({ message: "Question not found" });
-
     const questionData = JSON.parse(question.question_data);
     const response = await got
       .post(`${process.env.SERVICE_API}/answer-data`, {
@@ -106,10 +102,36 @@ const updateAnswer = async (req, res) => {
   }
 };
 
+const getAnswerAudio = async (req, res) => {
+  try {
+    const { id: teamId, is_admin } = req.auth;
+    const { id: answerId } = req.params;
+    const audioUrl = `${process.env.SERVICE_API}/audio`;
+    const answer = await Answer.findByPk(answerId);
+    if (!answer) return res.status(400).json({ message: "Answer not found" });
+    if (!is_admin && answer.team_id !== teamId)
+      return res.status(405).json({ message: "Not permited" });
+
+    const scoreData = JSON.parse(answer.score_data);
+    const response = await got
+      .get(audioUrl, {
+        searchParams: {
+          type: "answer",
+          answer_uuid: scoreData.answer_uuid,
+        },
+      })
+      .json();
+    return res.status(200).json(response);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAnswers,
   getAnswer,
   createAnswer,
   updateAnswer,
   removeAnswer,
+  getAnswerAudio,
 };

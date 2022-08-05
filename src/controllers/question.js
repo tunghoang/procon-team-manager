@@ -38,11 +38,32 @@ const createQuestion = async (req, res) => {
   }
 };
 
-const getAudioFile = async (req, res) => {
+// const getAudioFile = async (req, res) => {
+//   try {
+//     const { fileName } = req.params;
+//     const audioUrl = `${process.env.SERVICE_API}/audio/${fileName}`;
+//     return got.stream(audioUrl).pipe(res);
+//   } catch (error) {
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
+const getQuestionAudio = async (req, res) => {
   try {
-    const { fileName } = req.params;
-    const audioUrl = `${process.env.SERVICE_API}/audio/${fileName}`;
-    return got.stream(audioUrl).pipe(res);
+    const { id } = req.params;
+    const audioUrl = `${process.env.SERVICE_API}/audio`;
+    const question = await Question.findByPk(id);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+    const questionData = JSON.parse(question.question_data);
+    const response = await got.get(audioUrl, {
+      searchParams: {
+        type: "question",
+        question_uuid: questionData.question_uuid,
+      },
+    });
+    return res.status(200).json(response);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -51,15 +72,14 @@ const getAudioFile = async (req, res) => {
 const createDividedData = async (req, res) => {
   try {
     const { id } = req.params;
-    const n_divided = Number(req.body.n_divided);
     const { id: teamId } = req.auth;
+    const n_divided = Number(req.body.n_divided);
+    if (!n_divided || n_divided < 2 || n_divided > 5) {
+      throw new Error("Number of divided data required >= 2 and <= 5");
+    }
     const question = await Question.findByPk(id);
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
-    }
-
-    if (!n_divided || n_divided < 2 || n_divided > 5) {
-      throw new Error("Number of divided data required >= 2 and <= 5");
     }
     const questionData = JSON.parse(question.question_data);
 
@@ -84,6 +104,6 @@ module.exports = {
   createQuestion,
   updateQuestion,
   removeQuestion,
-  getAudioFile,
+  getQuestionAudio,
   createDividedData,
 };
