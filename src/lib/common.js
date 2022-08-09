@@ -1,18 +1,43 @@
-const { Op } = require("sequelize");
+const { Op, QueryTypes } = require("sequelize");
+const { sequelize } = require("../models");
 
-const getFilter = (query) => {
-  const filterFields = ["name", "description"];
-  return Object.keys(query).reduce((cur, qKey) => {
-    if (qKey.substring(0, 6) === "match_") {
-      const value = query[qKey];
-      const key = qKey.slice(6);
+const getFilter = (query, filterField) => {
+  return Object.keys(query).reduce((cur, queryField) => {
+    let value = query[queryField];
+    const filter = filterField[queryField];
+    if (!filter) return cur;
+    if (typeof value === "object") {
       return {
         ...cur,
-        [key]: filterFields.includes(key) ? { [Op.like]: `%${value}%` } : value,
+        ...getFilter(value, filter),
       };
     }
-    return cur;
+
+    return {
+      ...cur,
+      [filter.field]: {
+        [Op[filter.op]]: filter.op === "like" ? `%${value}%` : value,
+      },
+    };
   }, {});
 };
 
-module.exports = { getFilter };
+const checkValidAnswer = async (question, teamId) => {
+  let message = "";
+  const team = await sequelize.query(
+    `SELECT * FROM team_match where team_id = ${teamId} and match_id = ${question.match_id}`,
+    { type: QueryTypes.SELECT }
+  );
+  if (!team.length) message = "Team not added";
+  else if (!question.match.is_active) message = "Match not actived";
+  else {
+    const now = new Date();
+    const startTime = new Date(question.start_time);
+    const endTime = new Date(question.end_time);
+    if (now < startTime || now > endTime) message = "Out of time";
+  }
+
+  return message;
+};
+
+module.exports = { getFilter, checkValidAnswer };

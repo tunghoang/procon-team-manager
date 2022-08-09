@@ -1,16 +1,17 @@
+const { sequelize } = require("../models");
 const { getFilter } = require("./common");
 
 const useController = (Model) => {
-  const getAll = async (req, res, ignore, include) => {
+  const getAll = async (req, res, ignore, include, filterField) => {
     try {
-      const filter = getFilter(req.query);
-      const data = await Model.findAll({
+      const filter = getFilter(req.query, filterField);
+      const data = await Model.findAndCountAll({
         where: filter,
         attributes: { exclude: ignore },
         include,
       });
 
-      return res.status(200).json({ data });
+      return res.status(200).json({ count: data.count, data: data.rows });
     } catch (error) {
       console.log(error);
       return res.status(500).json({ message: error.message });
@@ -18,7 +19,7 @@ const useController = (Model) => {
   };
   const get = async (req, res, ignore, include) => {
     const id = req.params.id;
-    const filter = getFilter(req.query);
+    const filter = getFilter(req.query, filterField);
     try {
       const data = await Model.findByPk(id, {
         where: filter,
@@ -44,7 +45,7 @@ const useController = (Model) => {
         id: data.id,
       });
     } catch (error) {
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ message: error.message });
     }
   };
 

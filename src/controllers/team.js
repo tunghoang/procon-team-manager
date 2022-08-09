@@ -5,17 +5,35 @@ const { comparePassword, encryptPassword } = require("../lib/encrypt");
 const useController = require("../lib/useController");
 const { getAll, get, update, create, remove } = useController(Team);
 
+const filterField = {
+  match_id: {
+    field: "id",
+    op: "like",
+  },
+  match_name: {
+    field: "name",
+    op: "like",
+  },
+  match_account: {
+    field: "account",
+    op: "like",
+  },
+  match_is_admin: {
+    field: "is_admin",
+    op: "like",
+  },
+};
+const ignore = ["password"];
+
 const getTeams = async (req, res) => {
-  const ignore = ["password"];
   if (!req.auth.is_admin) req.query.match_id = req.auth.id;
-  await getAll(req, res, ignore);
+  await getAll(req, res, ignore, null, filterField);
 };
 const getTeam = async (req, res) => {
-  const ignore = ["password"];
   if (req.params.id != req.auth.id) {
     return res.status(405).json({ message: "Not allowed" });
   }
-  await get(req, res, ignore);
+  await get(req, res, ignore, null, filterField);
 };
 
 const updateTeam = async (req, res) => {

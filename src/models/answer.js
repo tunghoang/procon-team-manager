@@ -14,7 +14,6 @@ Answer.init(
       type: DataTypes.TEXT,
     },
     score_data: {
-      // type: DataTypes.DECIMAL(10, 2),
       type: DataTypes.TEXT,
     },
   },

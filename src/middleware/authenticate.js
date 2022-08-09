@@ -20,7 +20,7 @@ const authenticate = (req, res, next) => {
       } else {
         req.auth = decoded;
         const team = await Team.findByPk(req.auth.id);
-        if (!team) return res.status(404).json({ message: "Team not found" });
+        if (!team) return res.status(401).json({ message: "Unauthorized" });
         req.auth.is_admin = team.is_admin;
         next();
       }

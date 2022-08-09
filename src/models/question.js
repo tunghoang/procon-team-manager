@@ -13,7 +13,6 @@ Question.init(
     name: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
     },
     start_time: {
       type: DataTypes.DATE,

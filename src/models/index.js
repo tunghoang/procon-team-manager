@@ -24,6 +24,15 @@ Round.hasMany(Match, {
   onDelete: "cascade",
 });
 
+Match.belongsTo(Round, {
+  as: "round",
+  foreignKey: {
+    name: "round_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
 Match.hasMany(Question, {
   as: "questions",
   foreignKey: {
@@ -34,6 +43,24 @@ Match.hasMany(Question, {
 });
 
 Question.belongsTo(Match, {
+  as: "match",
+  foreignKey: {
+    name: "match_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
+Match.hasMany(Answer, {
+  as: "answers",
+  foreignKey: {
+    name: "match_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
+Answer.belongsTo(Match, {
   as: "match",
   foreignKey: {
     name: "match_id",
