@@ -49,6 +49,10 @@ const filterField = {
     },
   },
   team: {
+    eq_id: {
+      field: "$team.id$",
+      op: "eq",
+    },
     match_name: {
       field: "$team.name$",
       op: "like",
@@ -57,11 +61,19 @@ const filterField = {
 };
 
 const getAnswers = async (req, res) => {
-  if (!req.auth.is_admin) req.query.match_team_id = req.auth.id;
+  if (!req.auth.is_admin)
+    req.query.team = {
+      ...req.query.team,
+      eq_id: req.auth.id,
+    };
   await getAll(req, res, null, include, filterField);
 };
 const getAnswer = async (req, res) => {
-  if (!req.auth.is_admin) req.query.match_team_id = req.auth.id;
+  if (!req.auth.is_admin)
+    req.query.team = {
+      ...req.query.team,
+      eq_id: req.auth.id,
+    };
   await get(req, res, null, include, filterField);
 };
 
@@ -139,7 +151,7 @@ const updateAnswer = async (req, res) => {
     });
     if (!answer) return res.status(404).json({ message: "Answer not found" });
 
-    if (is_admin) {
+    if (!is_admin) {
       let message = await checkValidAnswer(answer.question, teamId);
       if (answer.team_id !== teamId) message = "Team not allowed";
       if (message) return res.status(405).json({ message });

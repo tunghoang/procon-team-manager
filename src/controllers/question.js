@@ -1,6 +1,6 @@
 const got = require("got");
 const useController = require("../lib/useController");
-const { Match, Question } = require("../models");
+const { Match, Question, Answer } = require("../models");
 const { getAll, get, update, create, remove } = useController(Question);
 const { promisify } = require("node:util");
 const stream = require("node:stream");
@@ -43,10 +43,13 @@ const filterField = {
       field: "$match.round_id$",
       op: "eq",
     },
+    eq_id: {
+      field: "$match.id$",
+      op: "eq",
+    },
   },
 };
 const getQuestions = async (req, res) => {
-  console.log(req.query);
   await getAll(req, res, null, include, filterField);
 };
 
@@ -89,6 +92,15 @@ const createQuestion = async (req, res) => {
       .json();
     req.body.question_data = JSON.stringify(response);
     await create(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const downloadResource = async (req, res) => {
+  try {
+    const audioUrl = `${process.env.SERVICE_API}/download/resource`;
+    return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -159,4 +171,5 @@ module.exports = {
   getQuestionAudio,
   getDividedAudio,
   createDividedData,
+  downloadResource,
 };

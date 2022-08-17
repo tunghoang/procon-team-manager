@@ -1,4 +1,3 @@
-const { sequelize } = require("../models");
 const { getFilter } = require("./common");
 
 const useController = (Model) => {
@@ -13,7 +12,6 @@ const useController = (Model) => {
 
       return res.status(200).json({ count: data.count, data: data.rows });
     } catch (error) {
-      console.log(error);
       return res.status(500).json({ message: error.message });
     }
   };

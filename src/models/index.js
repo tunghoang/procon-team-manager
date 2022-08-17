@@ -15,6 +15,15 @@ Tournament.hasMany(Round, {
   onDelete: "cascade",
 });
 
+Round.belongsTo(Tournament, {
+  as: "tournament",
+  foreignKey: {
+    name: "tournament_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
 Round.hasMany(Match, {
   as: "matches",
   foreignKey: {

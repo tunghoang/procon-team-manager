@@ -1,12 +1,33 @@
 const Match = require("../models/match");
 const useController = require("../lib/useController");
-const { Team } = require("../models");
-const { handleTeamMatch } = require("../middleware/match");
+const { Team, Tournament } = require("../models");
+const Round = require("../models/round");
 const { getAll, get, update, create, remove } = useController(Match);
+
+const include = [
+  {
+    model: Team,
+    as: "teams",
+  },
+  {
+    model: Round,
+    as: "round",
+    include: [
+      {
+        model: Tournament,
+        as: "tournament",
+      },
+    ],
+  },
+];
 
 const filterField = {
   match_id: {
     field: "id",
+    op: "like",
+  },
+  match_is_active: {
+    field: "is_active",
     op: "like",
   },
   eq_tournament_id: {
@@ -17,20 +38,31 @@ const filterField = {
     field: "round_id",
     op: "eq",
   },
+  teams: {
+    eq_id: {
+      field: "$teams.id$",
+      op: "eq",
+    },
+  },
 };
 
-const include = [
-  {
-    model: Team,
-    as: "teams",
-  },
-];
-
 const getMatches = async (req, res) => {
+  const { is_admin, id } = req.auth;
+  if (!is_admin)
+    req.query.teams = {
+      ...req.query.teams,
+      eq_id: id,
+    };
   await getAll(req, res, null, include, filterField);
 };
 
 const getMatch = async (req, res) => {
+  const { is_admin, id } = req.auth;
+  if (!is_admin)
+    req.query.teams = {
+      ...req.query.teams,
+      eq_id: id,
+    };
   await get(req, res, null, include, filterField);
 };
 

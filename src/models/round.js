@@ -13,7 +13,6 @@ Round.init(
     name: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
     },
     description: {
       type: DataTypes.TEXT,
@@ -23,6 +22,11 @@ Round.init(
     sequelize,
     modelName: "Round",
     tableName: "round",
+    uniqueKeys: {
+      Items_unique: {
+        fields: ["name", "tournament_id"],
+      },
+    },
   }
 );
 
