@@ -162,6 +162,16 @@ const createDividedData = async (req, res) => {
   }
 };
 
+const getAudioFile = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const audioUrl = `${process.env.SERVICE_API}/download/resource/${filename}`;
+    return await pipeline(got.stream(audioUrl), res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getQuestions,
   getQuestion,
@@ -172,4 +182,5 @@ module.exports = {
   getDividedAudio,
   createDividedData,
   downloadResource,
+  getAudioFile,
 };
