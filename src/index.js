@@ -5,6 +5,7 @@ const app = express();
 const cors = require("cors");
 const { authenticate } = require("./middleware/authenticate");
 const routes = require("./routes");
+require("./docs.js")("/docs", app);
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
