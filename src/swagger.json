@@ -19,7 +19,9 @@
                 },
                 "data": {
                   "type": "array",
-                  "default": []
+                  "items": {
+                    "$ref": "#/definitions/Tournament"
+                  }
                 }
               }
             }
@@ -191,7 +193,9 @@
                 },
                 "data": {
                   "type": "array",
-                  "default": []
+                  "items": {
+                    "$ref": "#/definitions/Round"
+                  }
                 }
               }
             }
@@ -363,7 +367,9 @@
                 },
                 "data": {
                   "type": "array",
-                  "default": []
+                  "items": {
+                    "$ref": "#/definitions/Match"
+                  }
                 }
               }
             }
@@ -535,7 +541,9 @@
                 },
                 "data": {
                   "type": "array",
-                  "default": []
+                  "items": {
+                    "$ref": "#/definitions/Question"
+                  }
                 }
               }
             }
@@ -761,7 +769,9 @@
                 },
                 "data": {
                   "type": "array",
-                  "default": []
+                  "items": {
+                    "$ref": "#/definitions/Answer"
+                  }
                 }
               }
             }
@@ -1047,7 +1057,9 @@
                 },
                 "data": {
                   "type": "array",
-                  "default": []
+                  "items": {
+                    "$ref": "#/definitions/Team"
+                  }
                 }
               }
             }
@@ -1350,14 +1362,14 @@
         "id": {
           "type": "integer"
         },
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
         "answer_data": {
           "type": "string"
+        },
+        "score_data": {
+          "type": "string"
+        },
+        "team_id": {
+          "type": "integer"
         },
         "match_id": {
           "type": "integer"
