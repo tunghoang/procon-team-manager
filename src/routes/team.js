@@ -18,7 +18,7 @@ router.route("/").get(getTeams);
 router.route("/:id").get(getTeam).put(updateTeam);
 
 router.all("*", requireAdmin);
-router.route("/").get(getTeams).post(createTeam);
-router.route("/:id").get(getTeam).put(updateTeam).delete(removeTeam);
+router.route("/").post(createTeam);
+router.route("/:id").delete(removeTeam);
 
 module.exports = router;

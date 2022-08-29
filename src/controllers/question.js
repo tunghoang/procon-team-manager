@@ -156,7 +156,7 @@ const createDividedData = async (req, res) => {
         },
       })
       .json();
-    return res.status(200).json({ data: response });
+    return res.status(201).json({ data: response });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
