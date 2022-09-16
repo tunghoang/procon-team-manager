@@ -126,7 +126,8 @@ const createAnswer = async (req, res) => {
     req.body.match_id = question.match_id;
     await create(req, res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -175,7 +176,8 @@ const updateAnswer = async (req, res) => {
       id: answer.id,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -191,7 +193,8 @@ const getAnswerAudio = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/audio?type=answer&answer_uuid=${scoreData.answer_uuid}`;
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 

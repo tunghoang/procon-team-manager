@@ -75,7 +75,8 @@ const updateQuestion = async (req, res) => {
     req.body.question_data = JSON.stringify(response);
     await update(req, res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -93,7 +94,8 @@ const createQuestion = async (req, res) => {
     req.body.question_data = JSON.stringify(response);
     await create(req, res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -102,7 +104,8 @@ const downloadResource = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/download/resource`;
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -117,7 +120,8 @@ const getQuestionAudio = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/audio?type=question&question_uuid=${questionData.question_uuid}`;
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -134,7 +138,8 @@ const getDividedAudio = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/audio?type=divided&index=${index}&team_id=${teamId}&question_uuid=${questionData.question_uuid}`;
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -158,7 +163,8 @@ const createDividedData = async (req, res) => {
       .json();
     return res.status(200).json({ data: response });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -168,7 +174,8 @@ const getAudioFile = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/download/resource/${filename}`;
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
