@@ -9,13 +9,16 @@ const useController = (Model) => {
         attributes: { exclude: ignore },
         include,
       });
-
+      for (let row of data.rows) {
+        if (row.answer_data!=null && row.answer_data.length > 0) 
+          row.answer_data = JSON.parse(row.answer_data);
+      }
       return res.status(200).json({ count: data.count, data: data.rows });
     } catch (error) {
       return res.status(500).json({ message: error.message });
     }
   };
-  const get = async (req, res, ignore, include) => {
+  const get = async (req, res, ignore, include, filterField) => {
     const id = req.params.id;
     const filter = getFilter(req.query, filterField);
     try {

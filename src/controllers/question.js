@@ -117,7 +117,8 @@ const getQuestionAudio = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/audio?type=question&question_uuid=${questionData.question_uuid}`;
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return;
+    //return res.status(500).json({ message: error.message });
   }
 };
 
