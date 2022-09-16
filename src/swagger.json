@@ -4,95 +4,10 @@
     "title": "Procon"
   },
   "paths": {
-    "/team/signin": {
-      "post": {
-        "summary": "Signin account",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": false,
-            "schema": {
-              "$ref": "#/definitions/Team"
-            }
-          }
-        ],
-        "tags": [
-          "Auth"
-        ],
-        "responses": {
-          "201": {
-            "description": "Successfully",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "integer"
-                },
-                "token": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body supplied"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "500": {
-            "description": "Server error"
-          }
-        }
-      }
-    },
-    "/team/signup": {
-      "post": {
-        "summary": "Create a account",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": false,
-            "schema": {
-              "$ref": "#/definitions/Team"
-            }
-          }
-        ],
-        "tags": [
-          "Auth"
-        ],
-        "responses": {
-          "201": {
-            "description": "Successfully",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body supplied"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "500": {
-            "description": "Server error"
-          }
-        }
-      }
-    },
-    "/team": {
+    "/tournament": {
       "get": {
-        "summary": "Get all teams",
-        "tags": [
-          "Team"
-        ],
+        "summary": "Get all tournaments",
+        "tags": ["Tournament"],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -103,8 +18,1048 @@
                   "type": "integer"
                 },
                 "data": {
-                  "type": "string",
-                  "examples": "[]"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Tournament"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a tournament",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Tournament"
+            }
+          }
+        ],
+        "tags": ["Tournament"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Client error"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/tournament/{id}": {
+      "get": {
+        "summary": "Get a tournament",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of tournament",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Tournament"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "$ref": "#/definitions/Tournament"
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Edit a tournament",
+        "tags": ["Tournament"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of tournament",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Tournament"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a tournament",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of tournament to delete",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Tournament"],
+        "responses": {
+          "200": {
+            "description": "Tournament deleted",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/round": {
+      "get": {
+        "summary": "Get all rounds",
+        "tags": ["Round"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Round"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a Round",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Round"
+            }
+          }
+        ],
+        "tags": ["Round"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Client error"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/round/{id}": {
+      "get": {
+        "summary": "Get a round",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of round",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Round"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "$ref": "#/definitions/Round"
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Edit a round",
+        "tags": ["Round"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of round",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Round"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a round",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of round to delete",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Round"],
+        "responses": {
+          "200": {
+            "description": "Round deleted",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/match": {
+      "get": {
+        "summary": "Get all matches",
+        "tags": ["Match"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Match"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a Match",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Match"
+            }
+          }
+        ],
+        "tags": ["Match"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Client error"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/match/{id}": {
+      "get": {
+        "summary": "Get a match",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of match",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Match"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "$ref": "#/definitions/Match"
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Edit a match",
+        "tags": ["Match"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of match",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Match"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a match",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of match to delete",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Match"],
+        "responses": {
+          "200": {
+            "description": "Match deleted",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question": {
+      "get": {
+        "summary": "Get all questions",
+        "tags": ["Question"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Question"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a question",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Question"
+            }
+          }
+        ],
+        "tags": ["Question"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Client error"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question/{id}": {
+      "get": {
+        "summary": "Get a question",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Question"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "$ref": "#/definitions/Question"
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Edit a question",
+        "tags": ["Question"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Question"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a question",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question to delete",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Question"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question/{id}/divided-data": {
+      "post": {
+        "summary": "Create divided data",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n_divided": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 5
+                }
+              }
+            }
+          }
+        ],
+        "tags": ["Question"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "array",
+              "items": {
+                "properties": {
+                  "index": {
+                    "type": "integer"
+                  },
+                  "duration": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/answer": {
+      "get": {
+        "summary": "Get all answers",
+        "tags": ["Answer"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Answer"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a answer",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Answer"
+            }
+          }
+        ],
+        "tags": ["Answer"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Client error"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/answer/{id}": {
+      "get": {
+        "summary": "Get a answer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of answer",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Answer"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "$ref": "#/definitions/Answer"
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Edit a answer",
+        "tags": ["Answer"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of answer",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Answer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a answer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of answer to delete",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Answer"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question/download/resource": {
+      "get": {
+        "summary": "Download all audio files",
+        "tags": ["Audio"],
+        "responses": {
+          "200": {
+            "description": "Successfully"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question/download/resource/{filename}": {
+      "get": {
+        "summary": "Download a audio file",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "description": "Filename of audio file",
+            "required": true,
+            "type": "string",
+            "examples": "E01.wav"
+          }
+        ],
+        "tags": ["Audio"],
+        "responses": {
+          "204": {
+            "description": "Successfully"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question/{id}/audio/problem-data": {
+      "get": {
+        "summary": "Get a problem audio file",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Audio"],
+        "responses": {
+          "200": {
+            "description": "Successfully"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question/{id}/audio/divided-data?index=0": {
+      "get": {
+        "summary": "Get a divided data segment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "index",
+            "in": "query",
+            "description": "Index of divided data",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Audio"],
+        "responses": {
+          "200": {
+            "description": "Successfully"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/answer/{id}/audio": {
+      "get": {
+        "summary": "Get a answer audio file",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of answer",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "tags": ["Audio"],
+        "responses": {
+          "200": {
+            "description": "Successfully"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/team": {
+      "get": {
+        "summary": "Get all teams",
+        "tags": ["Team"],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Team"
+                  }
                 }
               }
             }
@@ -122,15 +1077,12 @@
           {
             "name": "id",
             "in": "path",
-            "description": "ID of team to fetch",
+            "description": "ID of team",
             "required": true,
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         ],
-        "tags": [
-          "Team"
-        ],
+        "tags": ["Team"],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -151,22 +1103,18 @@
       },
       "put": {
         "summary": "Edit a team",
-        "tags": [
-          "Team"
-        ],
+        "tags": ["Team"],
         "parameters": [
           {
             "name": "id",
             "in": "path",
-            "description": "ID of team to fetch",
+            "description": "ID of team",
             "required": true,
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           {
             "in": "body",
             "name": "body",
-            "required": false,
             "schema": {
               "$ref": "#/definitions/Team"
             }
@@ -201,18 +1149,15 @@
           {
             "name": "id",
             "in": "path",
-            "description": "ID of team to delete",
+            "description": "ID of team",
             "required": true,
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         ],
-        "tags": [
-          "Team"
-        ],
+        "tags": ["Team"],
         "responses": {
           "200": {
-            "description": "Team deleted",
+            "description": "Successfully",
             "schema": {
               "type": "object",
               "properties": {
@@ -233,23 +1178,95 @@
           }
         }
       }
+    },
+    "/team/signin": {
+      "post": {
+        "summary": "Signin account",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Team"
+            }
+          }
+        ],
+        "tags": ["Auth"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "token": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Client error"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/team/signup": {
+      "post": {
+        "summary": "Create a account",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": false,
+            "schema": {
+              "$ref": "#/definitions/Team"
+            }
+          }
+        ],
+        "tags": ["Auth"],
+        "responses": {
+          "201": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Client error"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
     }
   },
-  
-  "consumes": [
-    "application/json"
-  ],
+
+  "consumes": ["application/json"],
   "definitions": {
     "Team": {
-      "required": [
-        "name",
-        "account",
-        "password"
-      ],
+      "required": ["name", "account", "password"],
       "properties": {
         "id": {
-          "type": "integer",
-          "format": "int64"
+          "type": "integer"
         },
         "name": {
           "type": "string"
@@ -262,6 +1279,105 @@
           "format": "password"
         }
       }
-    }  
-  } 
+    },
+    "Tournament": {
+      "required": ["name"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "Round": {
+      "required": ["name"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tournament_id": {
+          "type": "integer"
+        }
+      }
+    },
+    "Match": {
+      "required": ["name"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "is_active": {
+          "type": "boolean"
+        },
+        "round_id": {
+          "type": "integer"
+        }
+      }
+    },
+    "Question": {
+      "required": ["name"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "question_data": {
+          "type": "string"
+        },
+        "match_id": {
+          "type": "integer"
+        }
+      }
+    },
+    "Answer": {
+      "required": ["name"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "answer_data": {
+          "type": "string"
+        },
+        "score_data": {
+          "type": "string"
+        },
+        "team_id": {
+          "type": "integer"
+        },
+        "match_id": {
+          "type": "integer"
+        },
+        "question_id": {
+          "type": "integer"
+        }
+      }
+    }
+  }
 }

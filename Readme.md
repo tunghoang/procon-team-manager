@@ -2,4 +2,4 @@
 ``` npm/yarn dev ```
 
 ### Docs
-/api-docs
+/docs
