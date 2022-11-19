@@ -1,7 +1,7 @@
 const got = require("got");
-const { Answer, Question, Team, Match, sequelize } = require("../models");
+const { Answer, Question, Team, Match } = require("../models");
 const useController = require("../lib/useController");
-const { getAll, get, create, remove } = useController(Answer);
+const { getAll, create, remove } = useController(Answer);
 const { promisify } = require("node:util");
 const stream = require("node:stream");
 const { checkValidAnswer } = require("../lib/common");
@@ -139,6 +139,12 @@ const createAnswer = async (req, res) => {
         },
       })
       .json();
+
+    if (response.score_data?.total) delete response.score_data.total;
+    if (response.score_data?.correct) delete response.score_data.correct;
+    if (response.divided_data && response.divided_data?.length)
+      response.divided_data = response.divided_data.length;
+
     req.body.score_data = JSON.stringify(response);
     req.body.answer_data = JSON.stringify(answer_data);
     req.body.team_id = teamId;
@@ -187,6 +193,10 @@ const updateAnswer = async (req, res) => {
         },
       })
       .json();
+    if (response.score_data?.total) delete response.score_data.total;
+    if (response.score_data?.correct) delete response.score_data.correct;
+    if (response.divided_data && response.divided_data?.length)
+      response.divided_data = response.divided_data.length;
     await answer.update({
       score_data: JSON.stringify(response),
       answer_data: JSON.stringify(answer_data),
