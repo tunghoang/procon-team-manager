@@ -54,7 +54,7 @@ const getQuestions = async (req, res) => {
 };
 
 const getQuestion = async (req, res) => {
-  await get(req, res, null, include, filterField);
+  await get(req, res, null, include);
 };
 
 const updateQuestion = async (req, res) => {

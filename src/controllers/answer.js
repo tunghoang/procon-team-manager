@@ -4,7 +4,6 @@ const useController = require("../lib/useController");
 const { getAll, get, create, remove } = useController(Answer);
 const { promisify } = require("node:util");
 const stream = require("node:stream");
-const { QueryTypes } = require("sequelize");
 const { checkValidAnswer } = require("../lib/common");
 const pipeline = promisify(stream.pipeline);
 
@@ -16,6 +15,7 @@ const include = [
   {
     model: Team,
     as: "team",
+    attributes: ["id", "name"],
   },
   {
     model: Match,
@@ -29,6 +29,10 @@ const filterField = {
     op: "like",
   },
   match: {
+    eq_id: {
+      field: "$match.id$",
+      op: "eq",
+    },
     match_name: {
       field: "$match.name$",
       op: "like",
@@ -69,12 +73,27 @@ const getAnswers = async (req, res) => {
   await getAll(req, res, null, include, filterField);
 };
 const getAnswer = async (req, res) => {
-  if (!req.auth.is_admin)
-    req.query.team = {
-      ...req.query.team,
-      eq_id: req.auth.id,
-    };
-  await get(req, res, null, include, filterField);
+  const id = req.params.id;
+  try {
+    const answer = await Answer.findByPk(id, {
+      include,
+    });
+    if (!answer) {
+      return res.status(404).json({
+        message: `Answer not found`,
+      });
+    }
+
+    if (answer.team_id !== req.auth.id) {
+      return res.status(405).json({
+        message: "Not Allowed",
+      });
+    }
+
+    return res.status(200).json(answer);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const removeAnswer = async (req, res) => {

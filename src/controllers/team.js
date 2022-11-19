@@ -38,7 +38,7 @@ const getTeam = async (req, res) => {
   if (req.params.id != req.auth.id) {
     return res.status(405).json({ message: "Not allowed" });
   }
-  await get(req, res, ignore, include, filterField);
+  await get(req, res, ignore, include);
 };
 
 const updateTeam = async (req, res) => {

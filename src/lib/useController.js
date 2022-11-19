@@ -17,10 +17,8 @@ const useController = (Model) => {
   };
   const get = async (req, res, ignore, include) => {
     const id = req.params.id;
-    const filter = getFilter(req.query, filterField);
     try {
       const data = await Model.findByPk(id, {
-        where: filter,
         attributes: { exclude: ignore },
         include,
       });
