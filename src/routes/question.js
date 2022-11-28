@@ -18,12 +18,13 @@ router.route("/download/resource").get(downloadResource);
 router.route("/download/resource/:filename").get(getAudioFile);
 router.route("/").get(getQuestions);
 router.route("/:id").get(getQuestion);
+
+router.get("/:id/audio/divided-data", getDividedAudio);
 router.post("/:id/divided-data", createDividedData);
 
-router.get("/:id/audio/problem-data", getQuestionAudio);
-router.get("/:id/audio/divided-data", getDividedAudio);
-
 router.all("*", requireAdmin);
+router.get("/:id/audio/problem-data", getQuestionAudio);
+
 router.route("/").post(createQuestion);
 router.route("/:id").put(updateQuestion).delete(removeQuestion);
 

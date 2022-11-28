@@ -69,12 +69,27 @@ const getAnswers = async (req, res) => {
   await getAll(req, res, null, include, filterField);
 };
 const getAnswer = async (req, res) => {
-  if (!req.auth.is_admin)
-    req.query.team = {
-      ...req.query.team,
-      eq_id: req.auth.id,
-    };
-  await get(req, res, null, include, filterField);
+  // if (!req.auth.is_admin)
+  //   req.query.team = {
+  //     ...req.query.team,
+  //     eq_id: req.auth.id,
+  //   };
+  // await get(req, res, null, include, filterField);
+  
+  const id = req.params.id;
+  try {
+    const data = await Answer.findByPk(id, {include});
+
+    if (!data || (!req.auth.is_admin && req.auth.id !== data.team_id)) {
+      return res.status(404).json({
+        message: `${Answer.name} not found`,
+      });
+    }
+
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const removeAnswer = async (req, res) => {
@@ -86,7 +101,8 @@ const createAnswer = async (req, res) => {
     const { is_admin } = req.auth;
     const teamId =
       req.body.team_id && is_admin ? req.body.team_id : req.auth.id;
-    const { question_id, answer_data } = req.body;
+    let { question_id, answer_data } = req.body;
+    answer_data = answer_data.sort();
     const question = await Question.findByPk(question_id, {
       include: [
         {
@@ -126,7 +142,8 @@ const createAnswer = async (req, res) => {
     req.body.match_id = question.match_id;
     await create(req, res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -134,7 +151,8 @@ const updateAnswer = async (req, res) => {
   try {
     const { id: teamId, is_admin } = req.auth;
     const { id: answerId } = req.params;
-    const { answer_data } = req.body;
+    let { answer_data } = req.body;
+    answer_data = answer_data.sort();
     const answer = await Answer.findByPk(answerId, {
       include: [
         {
@@ -175,7 +193,8 @@ const updateAnswer = async (req, res) => {
       id: answer.id,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
@@ -191,7 +210,8 @@ const getAnswerAudio = async (req, res) => {
     const audioUrl = `${process.env.SERVICE_API}/audio?type=answer&answer_uuid=${scoreData.answer_uuid}`;
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
   }
 };
 
