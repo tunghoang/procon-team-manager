@@ -8,6 +8,7 @@ const include = [
   {
     model: Team,
     as: "teams",
+    attributes: ["id", "name"],
   },
   {
     model: Round,
@@ -57,13 +58,27 @@ const getMatches = async (req, res) => {
 };
 
 const getMatch = async (req, res) => {
-  const { is_admin, id } = req.auth;
-  if (!is_admin)
-    req.query.teams = {
-      ...req.query.teams,
-      eq_id: id,
-    };
-  await get(req, res, null, include, filterField);
+  const id = req.params.id;
+  try {
+    const match = await Match.findByPk(id, {
+      include,
+    });
+    if (!match) {
+      return res.status(404).json({
+        message: `Match not found`,
+      });
+    }
+
+    const team = match.teams.find((team) => team.id === req.auth.id);
+    if (!team)
+      return res.status(405).json({
+        message: "Not Allowed",
+      });
+
+    return res.status(200).json(match);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const createMatch = async (req, res) => {

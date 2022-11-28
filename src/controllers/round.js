@@ -18,7 +18,7 @@ const getRounds = async (req, res) => {
 };
 
 const getRound = async (req, res) => {
-  await get(req, res, null, null, filterField);
+  await get(req, res, null, null);
 };
 
 const createRound = async (req, res) => {
