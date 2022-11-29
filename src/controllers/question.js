@@ -5,6 +5,7 @@ const { getAll, get, update, create, remove } = useController(Question);
 const { promisify } = require("node:util");
 const stream = require("node:stream");
 const pipeline = promisify(stream.pipeline);
+const { getFilter, safeJSONParse } = require("../lib/common");
 
 const include = [
   {
@@ -50,11 +51,65 @@ const filterField = {
   },
 };
 const getQuestions = async (req, res) => {
-  await getAll(req, res, null, include, filterField);
+  // await getAll(req, res, null, include, filterField);
+  try {
+    const filter = getFilter(req.query, filterField);
+    const data = await Question.findAndCountAll({
+      where: filter,
+      attributes: { exclude: null },
+      include,
+    });
+
+    // remove confidential data
+    if (!req.auth.is_admin) {
+      for (let row of data.rows) {
+        if (row.question_data != null && row.question_data.length > 0) {
+          const qsData = safeJSONParse(row.question_data);
+          if (qsData) {
+            delete qsData.answer_data;
+            delete qsData.divided_data;
+            row.question_data = JSON.stringify(qsData);
+          }
+        } 
+      }
+    }
+
+    return res.status(200).json({ count: data.count, data: data.rows });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const getQuestion = async (req, res) => {
-  await get(req, res, null, include);
+  // await get(req, res, null, include);
+  const id = req.params.id;
+  try {
+    const data = await Question.findByPk(id, {
+      attributes: { exclude: null },
+      include,
+    });
+
+    if (!data) {
+      return res.status(404).json({
+        message: `${Question.name} not found`,
+      });
+    }
+
+    if (!req.auth.is_admin) {
+      if (data.question_data != null && data.question_data.length > 0) {
+        const qsData = safeJSONParse(data.question_data);
+        if (qsData) {
+          delete qsData.answer_data;
+          delete qsData.divided_data;
+          data.question_data = JSON.stringify(qsData);
+        }
+      } 
+    }
+
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const updateQuestion = async (req, res) => {

@@ -40,4 +40,15 @@ const checkValidAnswer = async (question, teamId) => {
   return message;
 };
 
-module.exports = { getFilter, checkValidAnswer };
+const safeJSONParse = (str) => {
+  try {
+    const j = JSON.parse(str);
+
+    return j;
+  } catch(e) {
+    // handle exception, logging?
+    return null;
+  }
+}
+
+module.exports = { getFilter, checkValidAnswer, safeJSONParse };

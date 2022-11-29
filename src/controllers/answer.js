@@ -162,8 +162,8 @@ const createAnswer = async (req, res) => {
       })
       .json();
 
-    //if (response.score_data?.total) delete response.score_data.total;
-    //if (response.score_data?.correct) delete response.score_data.correct;
+    if (response.score_data?.total) delete response.score_data.total;
+    if (response.score_data?.correct) delete response.score_data.correct;
 
     if (response.divided_data && response.divided_data?.length)
       response.divided_data = response.divided_data.length;
