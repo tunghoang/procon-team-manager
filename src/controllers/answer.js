@@ -11,6 +11,7 @@ const include = [
   {
     model: Question,
     as: "question",
+    attributes: ["id", "name", "match_id", "start_time", "end_time", "updatedAt", "createdAt"],
   },
   {
     model: Team,
