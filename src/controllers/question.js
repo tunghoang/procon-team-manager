@@ -153,13 +153,16 @@ const createQuestion = async (req, res) => {
       console.log(req.body);
       return res.status(406).json({message: "match_id is not valid"});
     }
+
+    const bonus_factor = req.body.bonus_factor;
+    const penalty_per_change = req.body.penalty_per_change;
     const response = await got
       .get(`${process.env.SERVICE_API}/problem-data`, {
         searchParams: { 
           n_cards: req.body.n_cards || 0, 
           n_parts: req.body.n_parts || 2,
-          bonus_factor: req.body.bonus_factor || 1.,
-          penalty_per_change: req.body.penalty_per_change || 2.,
+          bonus_factor: isNaN(bonus_factor) ? 1. : bonus_factor,
+          penalty_per_change: isNaN(penalty_per_change) ? 2. : penalty_per_change,
           point_per_correct: req.body.point_per_correct || 10
         },
       })
