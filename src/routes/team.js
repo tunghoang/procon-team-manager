@@ -15,10 +15,10 @@ router.post("/signin", signin);
 router.post("/signup", createTeam);
 
 router.route("/").get(getTeams);
-router.route("/:id").get(getTeam).put(updateTeam);
+router.route("/:id").get(getTeam);
 
 router.all("*", requireAdmin);
 router.route("/").post(createTeam);
-router.route("/:id").delete(removeTeam);
+router.route("/:id").put(updateTeam).delete(removeTeam);
 
 module.exports = router;

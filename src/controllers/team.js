@@ -43,15 +43,15 @@ const getTeam = async (req, res) => {
 
 const updateTeam = async (req, res) => {
   try {
-    if (req.params.id != req.auth.id) {
-      return res.status(405).json({ message: "Not allowed" });
-    }
-    if (!req.auth.is_admin) {
-      req.body = {
-        name: req.body.name,
-        password: req.body.password,
-      };
-    }
+    // if (req.params.id != req.auth.id) {
+    //   return res.status(405).json({ message: "Not allowed" });
+    // }
+    // if (!req.auth.is_admin) {
+    //   req.body = {
+    //     name: req.body.name,
+    //     password: req.body.password,
+    //   };
+    // }
     req.body.password =
       req.body.password && (await encryptPassword(req.body.password));
     await update(req, res);
@@ -66,7 +66,7 @@ const removeTeam = async (req, res) => {
 
 const signin = async (req, res) => {
   const { account, password } = req.body;
-  if (account === 'admin' && password === 'qwertyui') {
+  if (account === 'admin' && password === 'procon@2022') {
     const token = jwt.sign(
       {
         id: 0,
