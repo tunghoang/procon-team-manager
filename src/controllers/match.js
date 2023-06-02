@@ -70,7 +70,7 @@ const getMatch = async (req, res) => {
     }
 
     const team = match.teams.find((team) => team.id === req.auth.id);
-    if (!team)
+    if (!team && !req.auth.is_admin)
       return res.status(405).json({
         message: "Not Allowed",
       });
