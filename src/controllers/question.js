@@ -95,17 +95,6 @@ const getQuestion = async (req, res) => {
       });
     }
 
-    //if (!req.auth.is_admin) {
-    //  if (data.question_data != null && data.question_data.length > 0) {
-    //    const qsData = safeJSONParse(data.question_data);
-    //    if (qsData) {
-    //      delete qsData.answer_data;
-    //      delete qsData.divided_data;
-    //      data.question_data = JSON.stringify(qsData);
-    //    }
-    //  }
-    //}
-
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -119,19 +108,19 @@ const updateQuestion = async (req, res) => {
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
     }
-    //    const response = await got
-    //      .put(`${process.env.SERVICE_API}/problem-data`, {
-    //        json: {
-    //          n_cards: req.body.n_cards,
-    //          n_parts: req.body.n_parts,
-    //          bonus_factor: req.body.bonus_factor,
-    //          penalty_per_change: req.body.penalty_per_change,
-    //          point_per_correct: req.body.point_per_correct,
-    //          question_uuid: JSON.parse(question.question_data).question_uuid,
-    //        },
-    //      })
-    //      .json();
-    //    req.body.question_data = JSON.stringify(response);
+    //  const response = await got
+    //    .put(`${process.env.SERVICE_API}/problem-data`, {
+    //      json: {
+    //        n_cards: req.body.n_cards,
+    //        n_parts: req.body.n_parts,
+    //        bonus_factor: req.body.bonus_factor,
+    //        penalty_per_change: req.body.penalty_per_change,
+    //        point_per_correct: req.body.point_per_correct,
+    //        question_uuid: JSON.parse(question.question_data).question_uuid,
+    //      },
+    //    })
+    //    .json();
+    //  req.body.question_data = JSON.stringify(response);
     await update(req, res);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
@@ -160,19 +149,6 @@ const createQuestion = async (req, res) => {
         },
       })
       .json();
-    //    const bonus_factor = req.body.bonus_factor;
-    //    const penalty_per_change = req.body.penalty_per_change;
-    //    const response = await got
-    //      .get(`${process.env.SERVICE_API}/problem-data`, {
-    //        searchParams: {
-    //          n_cards: req.body.n_cards || 0,
-    //          n_parts: req.body.n_parts || 2,
-    //          bonus_factor: isNaN(bonus_factor) ? 1. : bonus_factor,
-    //          penalty_per_change: isNaN(penalty_per_change) ? 2. : penalty_per_change,
-    //          point_per_correct: req.body.point_per_correct || 10
-    //        },
-    //      })
-    //      .json();
     req.body.question_data = JSON.stringify(response);
     await create(req, res);
   } catch (error) {

@@ -177,7 +177,10 @@ const updateAnswer = async (req, res) => {
 
     penalties = JSON.parse(answer.score_data).penalties;
 
-    //if (penalties > 10) return res.state(429).json({message: "Maximum number of changes exceeded"})
+    if (penalties > 30)
+      return res
+        .state(429)
+        .json({ message: "Maximum number of changes exceeded" });
 
     const response = await got
       .post(`${process.env.SERVICE_API}/answer`, {
