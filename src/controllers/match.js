@@ -48,8 +48,8 @@ const filterField = {
 };
 
 const getMatches = async (req, res) => {
-  const { is_admin, id } = req.auth;
-  if (!is_admin)
+  const { is_admin, id, name } = req.auth;
+  if (!is_admin && name !== 'admin')
     req.query.teams = {
       ...req.query.teams,
       eq_id: id,
@@ -58,9 +58,8 @@ const getMatches = async (req, res) => {
 };
 
 const getMatch = async (req, res) => {
-  const id = req.params.id;
   try {
-    const match = await Match.findByPk(id, {
+    const match = await Match.findByPk(req.params.id, {
       include,
     });
     if (!match) {
@@ -68,9 +67,10 @@ const getMatch = async (req, res) => {
         message: `Match not found`,
       });
     }
-
-    const team = match.teams.find((team) => team.id === req.auth.id);
-    if (!team && !req.auth.is_admin)
+    
+    const {id: authId, is_admin, name} = req.auth;
+    const team = match.teams.find((team) => team.id === authId);
+    if (!team && !is_admin && name !== 'admin')
       return res.status(405).json({
         message: "Not Allowed",
       });

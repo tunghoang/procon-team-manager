@@ -43,15 +43,6 @@ const getTeam = async (req, res) => {
 
 const updateTeam = async (req, res) => {
   try {
-    // if (req.params.id != req.auth.id) {
-    //   return res.status(405).json({ message: "Not allowed" });
-    // }
-    // if (!req.auth.is_admin) {
-    //   req.body = {
-    //     name: req.body.name,
-    //     password: req.body.password,
-    //   };
-    // }
     req.body.password =
       req.body.password && (await encryptPassword(req.body.password));
     await update(req, res);
@@ -97,7 +88,11 @@ const signin = async (req, res) => {
         name: team.name,
         is_admin: team.is_admin,
       },
-      process.env.JWT_SECRET_KEY
+      process.env.JWT_SECRET_KEY,
+      {
+           algorithm: "HS256",
+           expiresIn: "2d"
+      }
     );
 
     return res.status(200).json({

@@ -1,10 +1,10 @@
 const got = require("got");
-const { Answer, Question, Team, Match } = require("../models");
 const useController = require("../lib/useController");
+const { Answer, Question, Team, Match } = require("../models");
 const { getAll, create, remove } = useController(Answer);
 const { promisify } = require("node:util");
-const stream = require("node:stream");
 const { checkValidAnswer } = require("../lib/common");
+const stream = require("node:stream");
 const pipeline = promisify(stream.pipeline);
 
 const include = [
@@ -73,15 +73,8 @@ const getAnswers = async (req, res) => {
     };
   await getAll(req, res, null, include, filterField);
 };
+
 const getAnswer = async (req, res) => {
-//<<<<<<< HEAD
-  // if (!req.auth.is_admin)
-  //   req.query.team = {
-  //     ...req.query.team,
-  //     eq_id: req.auth.id,
-  //   };
-  // await get(req, res, null, include, filterField);
-  
   const id = req.params.id;
   try {
     const data = await Answer.findByPk(id, {include});
@@ -93,26 +86,6 @@ const getAnswer = async (req, res) => {
     }
 
     return res.status(200).json(data);
-/*=======
-  const id = req.params.id;
-  try {
-    const answer = await Answer.findByPk(id, {
-      include,
-    });
-    if (!answer) {
-      return res.status(404).json({
-        message: `Answer not found`,
-      });
-    }
-
-    if (answer.team_id !== req.auth.id) {
-      return res.status(405).json({
-        message: "Not Allowed",
-      });
-    }
-
-    return res.status(200).json(answer);
->>>>>>> e7d8797e62078c77b73cfce0842a0ac36e13817b */
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -124,11 +97,8 @@ const removeAnswer = async (req, res) => {
 
 const createAnswer = async (req, res) => {
   try {
-    const { is_admin } = req.auth;
-    const teamId =
-      req.body.team_id && is_admin ? req.body.team_id : req.auth.id;
-    let { question_id, answer_data } = req.body;
-    answer_data = answer_data.sort();
+    const teamId = req.auth.id;
+    const { question_id, answer_data } = req.body;
     const question = await Question.findByPk(question_id, {
       include: [
         {
@@ -140,10 +110,8 @@ const createAnswer = async (req, res) => {
     if (!question)
       return res.status(404).json({ message: "Question not found" });
 
-    if (!is_admin) {
-      let message = await checkValidAnswer(question, teamId);
-      if (message) return res.status(405).json({ message });
-    }
+    let message = await checkValidAnswer(question, teamId);
+    if (message) return res.status(405).json({ message });
 
     const answer = await Answer.findOne({
       where: {
@@ -154,21 +122,14 @@ const createAnswer = async (req, res) => {
     if (answer) return res.status(400).json({ message: "Answer exsited" });
 
     const response = await got
-      .post(`${process.env.SERVICE_API}/answer-data`, {
+      .post(`${process.env.SERVICE_API}/answer`, {
         json: {
-          question_uuid: JSON.parse(question.question_data).question_uuid,
-          answer_data,
-          team_id: teamId,
+          question: JSON.parse(question.question_data),
+          answer_data
         },
       })
       .json();
-
-    if (response.score_data?.total) delete response.score_data.total;
-    if (response.score_data?.correct) delete response.score_data.correct;
-
-    if (response.divided_data && response.divided_data?.length)
-      response.divided_data = response.divided_data.length;
-
+    response.penalties = 0;
     req.body.score_data = JSON.stringify(response);
     req.body.answer_data = JSON.stringify(answer_data);
     req.body.team_id = teamId;
@@ -182,10 +143,9 @@ const createAnswer = async (req, res) => {
 
 const updateAnswer = async (req, res) => {
   try {
-    const { id: teamId, is_admin } = req.auth;
-    const { id: answerId } = req.params;
-    let { answer_data } = req.body;
-    answer_data = answer_data.sort();
+    const teamId = req.auth.id;
+    const answerId = req.params.id;
+    const { answer_data } = req.body;
     const answer = await Answer.findByPk(answerId, {
       include: [
         {
@@ -200,28 +160,26 @@ const updateAnswer = async (req, res) => {
         },
       ],
     });
+
     if (!answer) return res.status(404).json({ message: "Answer not found" });
 
-    if (!is_admin) {
-      let message = await checkValidAnswer(answer.question, teamId);
-      if (answer.team_id !== teamId) message = "Team not allowed";
-      if (message) return res.status(405).json({ message });
-    }
+    let message = await checkValidAnswer(answer.question, teamId);
+    if (answer.team_id !== teamId) message = "Team not allowed";
+    if (message) return res.status(405).json({ message });
+  
+    penalties = JSON.parse(answer.score_data).penalties;
+
+    //if (penalties > 10) return res.state(429).json({message: "Maximum number of changes exceeded"})
 
     const response = await got
-      .post(`${process.env.SERVICE_API}/answer-data`, {
+      .post(`${process.env.SERVICE_API}/answer`, {
         json: {
-          question_uuid: JSON.parse(answer.question.question_data)
-            .question_uuid,
+          question: JSON.parse(answer.question.question_data),
           answer_data,
-          team_id: teamId,
         },
       })
       .json();
-    if (response.score_data?.total) delete response.score_data.total;
-    if (response.score_data?.correct) delete response.score_data.correct;
-    if (response.divided_data && response.divided_data?.length)
-      response.divided_data = response.divided_data.length;
+    response.penalties = penalties + 1;
     await answer.update({
       score_data: JSON.stringify(response),
       answer_data: JSON.stringify(answer_data),
