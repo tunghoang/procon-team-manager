@@ -70,7 +70,7 @@ const getQuestions = async (req, res) => {
     //        delete qsData.divided_data;
     //        row.question_data = JSON.stringify(qsData);
     //      }
-    //    } 
+    //    }
     //  }
     //}
 
@@ -103,7 +103,7 @@ const getQuestion = async (req, res) => {
     //      delete qsData.divided_data;
     //      data.question_data = JSON.stringify(qsData);
     //    }
-    //  } 
+    //  }
     //}
 
     return res.status(200).json(data);
@@ -119,19 +119,19 @@ const updateQuestion = async (req, res) => {
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
     }
-//    const response = await got
-//      .put(`${process.env.SERVICE_API}/problem-data`, {
-//        json: {
-//          n_cards: req.body.n_cards,
-//          n_parts: req.body.n_parts,
-//          bonus_factor: req.body.bonus_factor,
-//          penalty_per_change: req.body.penalty_per_change,
-//          point_per_correct: req.body.point_per_correct,
-//          question_uuid: JSON.parse(question.question_data).question_uuid,
-//        },
-//      })
-//      .json();
-//    req.body.question_data = JSON.stringify(response);
+    //    const response = await got
+    //      .put(`${process.env.SERVICE_API}/problem-data`, {
+    //        json: {
+    //          n_cards: req.body.n_cards,
+    //          n_parts: req.body.n_parts,
+    //          bonus_factor: req.body.bonus_factor,
+    //          penalty_per_change: req.body.penalty_per_change,
+    //          point_per_correct: req.body.point_per_correct,
+    //          question_uuid: JSON.parse(question.question_data).question_uuid,
+    //        },
+    //      })
+    //      .json();
+    //    req.body.question_data = JSON.stringify(response);
     await update(req, res);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
@@ -149,30 +149,30 @@ const createQuestion = async (req, res) => {
   try {
     const match_id = req.body.match_id;
     if (!match_id) {
-      return res.status(406).json({message: "match_id invalid"});
+      return res.status(406).json({ message: "match_id invalid" });
     }
     const response = await got
       .get(`${process.env.SERVICE_API}/board`, {
-        searchParams: { 
-          w: req.body.width || 32, 
-          h: req.body.height || 32, 
+        searchParams: {
+          w: req.body.width || 32,
+          h: req.body.height || 32,
           p: req.body.p || 2,
         },
       })
       .json();
-//    const bonus_factor = req.body.bonus_factor;
-//    const penalty_per_change = req.body.penalty_per_change;
-//    const response = await got
-//      .get(`${process.env.SERVICE_API}/problem-data`, {
-//        searchParams: { 
-//          n_cards: req.body.n_cards || 0, 
-//          n_parts: req.body.n_parts || 2,
-//          bonus_factor: isNaN(bonus_factor) ? 1. : bonus_factor,
-//          penalty_per_change: isNaN(penalty_per_change) ? 2. : penalty_per_change,
-//          point_per_correct: req.body.point_per_correct || 10
-//        },
-//      })
-//      .json();
+    //    const bonus_factor = req.body.bonus_factor;
+    //    const penalty_per_change = req.body.penalty_per_change;
+    //    const response = await got
+    //      .get(`${process.env.SERVICE_API}/problem-data`, {
+    //        searchParams: {
+    //          n_cards: req.body.n_cards || 0,
+    //          n_parts: req.body.n_parts || 2,
+    //          bonus_factor: isNaN(bonus_factor) ? 1. : bonus_factor,
+    //          penalty_per_change: isNaN(penalty_per_change) ? 2. : penalty_per_change,
+    //          point_per_correct: req.body.point_per_correct || 10
+    //        },
+    //      })
+    //      .json();
     req.body.question_data = JSON.stringify(response);
     await create(req, res);
   } catch (error) {
@@ -228,7 +228,7 @@ const getDividedAudio = async (req, res) => {
     //const audioUrl = `${process.env.SERVICE_API}/audio?type=divided&index=${index}&team_id=${teamId}&question_uuid=${questionData.question_uuid}`;
     const audioUrl = `${process.env.SERVICE_API}/audio?type=divided&uuid=${uuid}&team_id=${teamId}&question_uuid=${questionData.question_uuid}`;
     // End
-    
+
     return await pipeline(got.stream(audioUrl), res);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
@@ -240,7 +240,7 @@ const getDividedAudio = async (req, res) => {
 const createDividedData = async (req, res) => {
   try {
     const { id } = req.params;
-    const { "new": _new } = req.body;
+    const { new: _new } = req.body;
     const { id: teamId } = req.auth;
     const question = await Question.findByPk(id);
     if (!question)
@@ -252,7 +252,7 @@ const createDividedData = async (req, res) => {
         json: {
           team_id: teamId,
           question_uuid: questionData.question_uuid,
-          new: _new
+          new: _new,
         },
       })
       .json();

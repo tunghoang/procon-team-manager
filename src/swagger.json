@@ -86,26 +86,58 @@
               }
             }
           },
+
           "500": {
             "description": "Server error"
           }
         }
       },
       "post": {
-        "summary": "Create a answer",
+        "summary": "Create your answer",
         "parameters": [
           {
             "in": "body",
             "name": "body",
             "required": false,
             "schema": {
-              "$ref": "#/definitions/Answer"
+              "type": "object",
+              "properties": {
+                "question_id": {
+                  "type": "integer"
+                },
+                "answer_data": {
+                  "type": "object",
+                  "default": {
+                    "n": 3,
+                    "ops": [
+                      {
+                        "p": 4,
+                        "x": 5,
+                        "y": 6,
+                        "s": 2
+                      },
+                      {
+                        "p": 11,
+                        "x": 3,
+                        "y": -12,
+                        "s": 3
+                      },
+                      {
+                        "p": 25,
+                        "x": 6,
+                        "y": 0,
+                        "s": 0
+                      }
+                    ]
+                  }
+                }
+              }
             }
           }
         ],
         "tags": ["Answer"],
         "responses": {
-          "201": {
+          "200": {
             "description": "Successfully",
             "schema": {
               "type": "object",
@@ -171,16 +203,35 @@
             "type": "integer"
           },
           {
-            "in": "body",
             "name": "body",
-            "required": false,
+            "in": "body",
+            "required": true,
             "schema": {
-              "$ref": "#/definitions/Answer"
+              "type": "object",
+              "properties": {
+                "question_id": {
+                  "type": "integer"
+                },
+                "answer_data": {
+                  "type": "object",
+                  "default": {
+                    "n": 1,
+                    "ops": [
+                      {
+                        "p": 4,
+                        "x": 1,
+                        "y": 1,
+                        "s": 2
+                      }
+                    ]
+                  }
+                }
+              }
             }
           }
         ],
         "responses": {
-          "201": {
+          "200": {
             "description": "Successfully",
             "schema": {
               "type": "object",
@@ -236,7 +287,7 @@
   "consumes": ["application/json"],
   "definitions": {
     "Team": {
-      "required": ["name", "account", "password"],
+      "required": ["name", "account"],
       "properties": {
         "id": {
           "type": "integer"
@@ -247,9 +298,9 @@
         "account": {
           "type": "string"
         },
-        "password": {
-          "type": "string",
-          "format": "password"
+        "is_admin": {
+          "type": "boolean",
+          "default": false
         }
       }
     },
