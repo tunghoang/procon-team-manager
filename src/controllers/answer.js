@@ -11,7 +11,15 @@ const include = [
   {
     model: Question,
     as: "question",
-    attributes: ["id", "name", "match_id", "start_time", "end_time", "updatedAt", "createdAt"],
+    attributes: [
+      "id",
+      "name",
+      "match_id",
+      "start_time",
+      "end_time",
+      "updatedAt",
+      "createdAt",
+    ],
   },
   {
     model: Team,
@@ -77,7 +85,7 @@ const getAnswers = async (req, res) => {
 const getAnswer = async (req, res) => {
   const id = req.params.id;
   try {
-    const data = await Answer.findByPk(id, {include});
+    const data = await Answer.findByPk(id, { include });
 
     if (!data || (!req.auth.is_admin && req.auth.id !== data.team_id)) {
       return res.status(404).json({
@@ -125,7 +133,7 @@ const createAnswer = async (req, res) => {
       .post(`${process.env.SERVICE_API}/answer`, {
         json: {
           question: JSON.parse(question.question_data),
-          answer_data
+          answer_data,
         },
       })
       .json();
@@ -166,7 +174,7 @@ const updateAnswer = async (req, res) => {
     let message = await checkValidAnswer(answer.question, teamId);
     if (answer.team_id !== teamId) message = "Team not allowed";
     if (message) return res.status(405).json({ message });
-  
+
     penalties = JSON.parse(answer.score_data).penalties;
 
     //if (penalties > 10) return res.state(429).json({message: "Maximum number of changes exceeded"})
@@ -180,6 +188,7 @@ const updateAnswer = async (req, res) => {
       })
       .json();
     response.penalties = penalties + 1;
+    response.final_score -= response.penalties;
     await answer.update({
       score_data: JSON.stringify(response),
       answer_data: JSON.stringify(answer_data),

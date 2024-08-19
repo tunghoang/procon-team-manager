@@ -1,6 +1,6 @@
 require("dotenv").config();
 require("./models");
-const path = require('path');
+const path = require("path");
 const express = require("express");
 const app = express();
 const cors = require("cors");
@@ -11,24 +11,26 @@ require("./docs.js")("/docs", app);
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
 function serveIndexHtml(req, res) {
-  res.sendFile('index.html', {root: path.join(__dirname, '../../procon-react/build/')});
+  res.sendFile("index.html", {
+    root: path.join(__dirname, "../../procon-react/build/"),
+  });
 }
 
 app.use("/", express.static("../procon-react/build"));
-app.get('/rounds/*', serveIndexHtml);
-app.get('/matches/*', serveIndexHtml);
-app.get('/teams/*', serveIndexHtml);
-app.get('/questions/*', serveIndexHtml);
-app.get('/answers/*', serveIndexHtml);
-app.get('/rounds/*', serveIndexHtml);
-app.get('/competition/*', serveIndexHtml);
-app.get('/rounds', serveIndexHtml);
-app.get('/matches', serveIndexHtml);
-app.get('/teams', serveIndexHtml);
-app.get('/questions', serveIndexHtml);
-app.get('/answers', serveIndexHtml);
-app.get('/rounds', serveIndexHtml);
-app.get('/competition', serveIndexHtml);
+app.get("/rounds/*", serveIndexHtml);
+app.get("/matches/*", serveIndexHtml);
+app.get("/teams/*", serveIndexHtml);
+app.get("/questions/*", serveIndexHtml);
+app.get("/answers/*", serveIndexHtml);
+app.get("/rounds/*", serveIndexHtml);
+app.get("/competition/*", serveIndexHtml);
+app.get("/rounds", serveIndexHtml);
+app.get("/matches", serveIndexHtml);
+app.get("/teams", serveIndexHtml);
+app.get("/questions", serveIndexHtml);
+app.get("/answers", serveIndexHtml);
+app.get("/rounds", serveIndexHtml);
+app.get("/competition", serveIndexHtml);
 
 app.use(express.json());
 app.use(cors());
