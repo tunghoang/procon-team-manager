@@ -17,8 +17,7 @@ const include = [
       "match_id",
       "start_time",
       "end_time",
-      "updatedAt",
-      "createdAt",
+      "question_data",
     ],
   },
   {

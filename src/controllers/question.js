@@ -81,24 +81,24 @@ const getQuestions = async (req, res) => {
 };
 
 const getQuestion = async (req, res) => {
-  // await get(req, res, null, include);
-  const id = req.params.id;
-  try {
-    const data = await Question.findByPk(id, {
-      attributes: { exclude: null },
-      include,
-    });
+  await get(req, res, null, include);
+  // const id = req.params.id;
+  // try {
+  //   const data = await Question.findByPk(id, {
+  //     attributes: { exclude: null },
+  //     include,
+  //   });
 
-    if (!data) {
-      return res.status(404).json({
-        message: `${Question.name} not found`,
-      });
-    }
+  //   if (!data) {
+  //     return res.status(404).json({
+  //       message: `${Question.name} not found`,
+  //     });
+  //   }
 
-    return res.status(200).json(data);
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
+  //   return res.status(200).json(data);
+  // } catch (error) {
+  //   return res.status(500).json({ message: error.message });
+  // }
 };
 
 const updateQuestion = async (req, res) => {
@@ -159,126 +159,132 @@ const createQuestion = async (req, res) => {
   }
 };
 
-const downloadResource = async (req, res) => {
-  try {
-    const audioUrl = `${process.env.SERVICE_API}/download/resource`;
-    return await pipeline(got.stream(audioUrl), res);
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    console.log("downloadResource", errMsg);
-    return;
-    // return res.status(500).json({ message: errMsg });
-  }
-};
+// const downloadResource = async (req, res) => {
+//   try {
+//     const audioUrl = `${process.env.SERVICE_API}/download/resource`;
+//     return await pipeline(got.stream(audioUrl), res);
+//   } catch (error) {
+//     let errMsg = error.response ? error.response.body : error.message;
+//     console.log("downloadResource", errMsg);
+//     return;
+//     // return res.status(500).json({ message: errMsg });
+//   }
+// };
 
-const getQuestionAudio = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const question = await Question.findByPk(id);
-    if (!question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-    const questionData = JSON.parse(question.question_data);
-    const audioUrl = `${process.env.SERVICE_API}/audio?type=question&question_uuid=${questionData.question_uuid}`;
-    return await pipeline(got.stream(audioUrl), res);
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    console.log("getQuestionAudio", errMsg);
-    return;
-    /*return res.status(500).json({ message: errMsg });*/
-  }
-};
+// const getQuestionAudio = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const question = await Question.findByPk(id);
+//     if (!question) {
+//       return res.status(404).json({ message: "Question not found" });
+//     }
+//     const questionData = JSON.parse(question.question_data);
+//     const audioUrl = `${process.env.SERVICE_API}/audio?type=question&question_uuid=${questionData.question_uuid}`;
+//     return await pipeline(got.stream(audioUrl), res);
+//   } catch (error) {
+//     let errMsg = error.response ? error.response.body : error.message;
+//     console.log("getQuestionAudio", errMsg);
+//     return;
+//     /*return res.status(500).json({ message: errMsg });*/
+//   }
+// };
 
-const getDividedAudio = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { id: teamId } = req.auth;
-    const { uuid } = req.query;
-    const question = await Question.findByPk(id);
-    if (!question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-    const questionData = JSON.parse(question.question_data);
+// const getDividedAudio = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { id: teamId } = req.auth;
+//     const { uuid } = req.query;
+//     const question = await Question.findByPk(id);
+//     if (!question) {
+//       return res.status(404).json({ message: "Question not found" });
+//     }
+//     const questionData = JSON.parse(question.question_data);
 
-    // TUNG modified
-    //const audioUrl = `${process.env.SERVICE_API}/audio?type=divided&index=${index}&team_id=${teamId}&question_uuid=${questionData.question_uuid}`;
-    const audioUrl = `${process.env.SERVICE_API}/audio?type=divided&uuid=${uuid}&team_id=${teamId}&question_uuid=${questionData.question_uuid}`;
-    // End
+//     // TUNG modified
+//     //const audioUrl = `${process.env.SERVICE_API}/audio?type=divided&index=${index}&team_id=${teamId}&question_uuid=${questionData.question_uuid}`;
+//     const audioUrl = `${process.env.SERVICE_API}/audio?type=divided&uuid=${uuid}&team_id=${teamId}&question_uuid=${questionData.question_uuid}`;
+//     // End
 
-    return await pipeline(got.stream(audioUrl), res);
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    console.log("getDividedAudio", errMsg);
-    return;
-    //return res.status(500).json({ message: errMsg });
-  }
-};
-const createDividedData = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { new: _new } = req.body;
-    const { id: teamId } = req.auth;
-    const question = await Question.findByPk(id);
-    if (!question)
-      return res.status(404).json({ message: "Question not found" });
+//     return await pipeline(got.stream(audioUrl), res);
+//   } catch (error) {
+//     let errMsg = error.response ? error.response.body : error.message;
+//     console.log("getDividedAudio", errMsg);
+//     return;
+//     //return res.status(500).json({ message: errMsg });
+//   }
+// };
+// const createDividedData = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { new: _new } = req.body;
+//     const { id: teamId } = req.auth;
+//     const question = await Question.findByPk(id);
+//     if (!question)
+//       return res.status(404).json({ message: "Question not found" });
 
-    const questionData = JSON.parse(question.question_data);
-    const response = await got
-      .post(`${process.env.SERVICE_API}/divided-data`, {
-        json: {
-          team_id: teamId,
-          question_uuid: questionData.question_uuid,
-          new: _new,
-        },
-      })
-      .json();
-    return res.status(201).json({ data: response });
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    console.log("createDividedData", errMsg);
-    return;
-    //return res.status(500).json({ message: errMsg });
-  }
-};
+//     const questionData = JSON.parse(question.question_data);
+//     const response = await got
+//       .post(`${process.env.SERVICE_API}/divided-data`, {
+//         json: {
+//           team_id: teamId,
+//           question_uuid: questionData.question_uuid,
+//           new: _new,
+//         },
+//       })
+//       .json();
+//     return res.status(201).json({ data: response });
+//   } catch (error) {
+//     let errMsg = error.response ? error.response.body : error.message;
+//     console.log("createDividedData", errMsg);
+//     return;
+//     //return res.status(500).json({ message: errMsg });
+//   }
+// };
 
-const createDividedData_old = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { id: teamId } = req.auth;
-    const question = await Question.findByPk(id);
-    if (!question)
-      return res.status(404).json({ message: "Question not found" });
+// const createDividedData_old = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { id: teamId } = req.auth;
+//     const question = await Question.findByPk(id);
+//     if (!question)
+//       return res.status(404).json({ message: "Question not found" });
 
-    const questionData = JSON.parse(question.question_data);
-    const response = await got
-      .post(`${process.env.SERVICE_API}/divided-data`, {
-        json: {
-          team_id: teamId,
-          n_divided: req.body.n_divided,
-          question_uuid: questionData.question_uuid,
-        },
-      })
-      .json();
-    return res.status(201).json({ data: response });
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    console.log("createDividedData", errMsg);
-    return;
-    //return res.status(500).json({ message: errMsg });
-  }
-};
+//     const questionData = JSON.parse(question.question_data);
+//     const response = await got
+//       .post(`${process.env.SERVICE_API}/divided-data`, {
+//         json: {
+//           team_id: teamId,
+//           n_divided: req.body.n_divided,
+//           question_uuid: questionData.question_uuid,
+//         },
+//       })
+//       .json();
+//     return res.status(201).json({ data: response });
+//   } catch (error) {
+//     let errMsg = error.response ? error.response.body : error.message;
+//     console.log("createDividedData", errMsg);
+//     return;
+//     //return res.status(500).json({ message: errMsg });
+//   }
+// };
 
-const getAudioFile = async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const audioUrl = `${process.env.SERVICE_API}/download/resource/${filename}`;
-    return await pipeline(got.stream(audioUrl), res);
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    console.log("getAudioFile", errMsg);
-    return;
-    //return res.status(500).json({ message: errMsg });
-  }
+// const getAudioFile = async (req, res) => {
+//   try {
+//     const { filename } = req.params;
+//     const audioUrl = `${process.env.SERVICE_API}/download/resource/${filename}`;
+//     return await pipeline(got.stream(audioUrl), res);
+//   } catch (error) {
+//     let errMsg = error.response ? error.response.body : error.message;
+//     console.log("getAudioFile", errMsg);
+//     return;
+//     //return res.status(500).json({ message: errMsg });
+//   }
+// };
+
+const getTime = (req, res) => {
+  return res.status(200).json({
+    time: new Date(),
+  });
 };
 
 module.exports = {
@@ -287,9 +293,10 @@ module.exports = {
   createQuestion,
   updateQuestion,
   removeQuestion,
-  getQuestionAudio,
-  getDividedAudio,
-  createDividedData,
-  downloadResource,
-  getAudioFile,
+  // getQuestionAudio,
+  // getDividedAudio,
+  // createDividedData,
+  // downloadResource,
+  // getAudioFile,
+  getTime,
 };

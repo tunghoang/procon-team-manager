@@ -5,17 +5,20 @@ const {
   getQuestion,
   updateQuestion,
   removeQuestion,
-  createDividedData,
-  getQuestionAudio,
-  getDividedAudio,
-  downloadResource,
-  getAudioFile,
+  getTime,
+  // createDividedData,
+  // getQuestionAudio,
+  // getDividedAudio,
+  // downloadResource,
+  // getAudioFile,
 } = require("../controllers/question");
 const { requireAdmin } = require("../middleware/authenticate");
 
 const router = Router();
 // router.route("/download/resource").get(downloadResource);
 // router.route("/download/resource/:filename").get(getAudioFile);
+router.route("/time").get(getTime);
+
 router.route("/").get(getQuestions);
 router.route("/:id").get(getQuestion);
 

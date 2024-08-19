@@ -57,7 +57,7 @@ const removeTeam = async (req, res) => {
 
 const signin = async (req, res) => {
   const { account, password } = req.body;
-  if (account === 'admin' && password === 'procon@2022') {
+  if (account === "admin" && password === "procon@2022") {
     const token = jwt.sign(
       {
         id: 0,
@@ -80,7 +80,7 @@ const signin = async (req, res) => {
     if (!isMatch)
       return res
         .status(400)
-        .json({ message: "Account and Password haven't matched" });
+        .json({ message: "Account or password not matched" });
 
     const token = jwt.sign(
       {
@@ -90,8 +90,8 @@ const signin = async (req, res) => {
       },
       process.env.JWT_SECRET_KEY,
       {
-           algorithm: "HS256",
-           expiresIn: "2d"
+        algorithm: "HS256",
+        expiresIn: "2d",
       }
     );
 
