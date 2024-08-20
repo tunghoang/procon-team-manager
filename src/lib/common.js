@@ -28,8 +28,8 @@ const checkValidAnswer = async (question, teamId) => {
     `SELECT * FROM team_match where team_id = ${teamId} and match_id = ${question.match_id}`,
     { type: QueryTypes.SELECT }
   );
-  if (!team.length) message = "Team not added";
-  else if (!question.match.is_active) message = "Match not actived";
+  if (!team.length) message = "Question not found";
+  else if (!question.match.is_active) message = "Match inactive";
   else {
     const now = new Date();
     const startTime = new Date(question.start_time);
@@ -45,10 +45,10 @@ const safeJSONParse = (str) => {
     const j = JSON.parse(str);
 
     return j;
-  } catch(e) {
+  } catch (e) {
     // handle exception, logging?
     return null;
   }
-}
+};
 
 module.exports = { getFilter, checkValidAnswer, safeJSONParse };

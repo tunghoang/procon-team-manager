@@ -11,7 +11,7 @@ Answer.init(
       primaryKey: true,
     },
     answer_data: {
-      type: DataTypes.TEXT
+      type: DataTypes.TEXT("long"),
       /*get() {
         const raw = this.getDataValue('answer_data');
         try {

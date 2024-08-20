@@ -126,7 +126,6 @@ const createAnswer = async (req, res) => {
         question_id,
       },
     });
-    if (answer) return res.status(400).json({ message: "Answer exsited" });
 
     const response = await got
       .post(`${process.env.SERVICE_API}/answer`, {
@@ -136,85 +135,31 @@ const createAnswer = async (req, res) => {
         },
       })
       .json();
-    response.penalties = 0;
-    req.body.score_data = JSON.stringify(response);
-    req.body.answer_data = JSON.stringify(answer_data);
-    req.body.team_id = teamId;
-    req.body.match_id = question.match_id;
-    await create(req, res);
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    return res.status(500).json({ message: errMsg });
-  }
-};
 
-const updateAnswer = async (req, res) => {
-  try {
-    const teamId = req.auth.id;
-    const answerId = req.params.id;
-    const { answer_data } = req.body;
-    const answer = await Answer.findByPk(answerId, {
-      include: [
-        {
-          model: Question,
-          as: "question",
-          include: [
-            {
-              model: Match,
-              as: "match",
-            },
-          ],
-        },
-      ],
-    });
+    if (!answer) {
+      response.penalties = 0;
+      req.body.score_data = JSON.stringify(response);
+      req.body.answer_data = JSON.stringify(answer_data);
+      req.body.team_id = teamId;
+      req.body.match_id = question.match_id;
+      await create(req, res);
+    } else {
+      penalties = JSON.parse(answer.score_data).penalties;
+      if (penalties > 30)
+        return res
+          .state(429)
+          .json({ message: "Maximum number of changes exceeded" });
 
-    if (!answer) return res.status(404).json({ message: "Answer not found" });
-
-    let message = await checkValidAnswer(answer.question, teamId);
-    if (answer.team_id !== teamId) message = "Team not allowed";
-    if (message) return res.status(405).json({ message });
-
-    penalties = JSON.parse(answer.score_data).penalties;
-
-    if (penalties > 30)
-      return res
-        .state(429)
-        .json({ message: "Maximum number of changes exceeded" });
-
-    const response = await got
-      .post(`${process.env.SERVICE_API}/answer`, {
-        json: {
-          question: JSON.parse(answer.question.question_data),
-          answer_data,
-        },
-      })
-      .json();
-    response.penalties = penalties + 1;
-    response.final_score -= response.penalties;
-    await answer.update({
-      score_data: JSON.stringify(response),
-      answer_data: JSON.stringify(answer_data),
-    });
-    return res.status(200).json({
-      id: answer.id,
-    });
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    return res.status(500).json({ message: errMsg });
-  }
-};
-
-const getAnswerAudio = async (req, res) => {
-  try {
-    const { id: teamId, is_admin } = req.auth;
-    const { id: answerId } = req.params;
-    const answer = await Answer.findByPk(answerId);
-    if (!answer) return res.status(404).json({ message: "Answer not found" });
-    if (!is_admin && answer.team_id !== teamId)
-      return res.status(405).json({ message: "Not permited" });
-    const scoreData = JSON.parse(answer.score_data);
-    const audioUrl = `${process.env.SERVICE_API}/audio?type=answer&answer_uuid=${scoreData.answer_uuid}`;
-    return await pipeline(got.stream(audioUrl), res);
+      response.penalties = penalties + 1;
+      response.final_score -= response.penalties;
+      await answer.update({
+        score_data: JSON.stringify(response),
+        answer_data: JSON.stringify(answer_data),
+      });
+      return res.status(200).json({
+        id: answer.id,
+      });
+    }
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
     return res.status(500).json({ message: errMsg });
@@ -225,7 +170,5 @@ module.exports = {
   getAnswers,
   getAnswer,
   createAnswer,
-  updateAnswer,
   removeAnswer,
-  getAnswerAudio,
 };
