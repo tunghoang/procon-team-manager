@@ -8,6 +8,10 @@ const { authenticate } = require("./middleware/authenticate");
 const routes = require("./routes");
 require("./docs.js")("/docs", app);
 
+const bodyParser = require("body-parser");
+app.use(bodyParser.json({ limit: "50mb" }));
+app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
+
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
 function serveIndexHtml(req, res) {
