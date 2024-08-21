@@ -28,6 +28,8 @@ const include = [
   },
 ];
 
+const ignore = ["answer_data"];
+
 const filterField = {
   match_id: {
     field: "id",
@@ -75,13 +77,18 @@ const getAnswers = async (req, res) => {
       ...req.query.team,
       eq_id: req.auth.id,
     };
-  await getAll(req, res, null, include, filterField);
+  await getAll(req, res, ignore, include, filterField);
 };
 
 const getAnswer = async (req, res) => {
   const id = req.params.id;
   try {
-    const data = await Answer.findByPk(id, { include });
+    const data = await Answer.findByPk(id, {
+      attributes: {
+        exclude: ignore,
+      },
+      include,
+    });
 
     if (!data || (!req.auth.is_admin && req.auth.id !== data.team_id)) {
       return res.status(404).json({

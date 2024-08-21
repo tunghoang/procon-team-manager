@@ -54,7 +54,6 @@ const getQuestions = async (req, res) => {
   try {
     let questions = await Question.findAll({
       where: getFilter(req.query, filterField),
-      attributes: { exclude: null },
       include,
     });
 
@@ -84,7 +83,6 @@ const getQuestion = async (req, res) => {
   const id = req.params.id;
   try {
     const question = await Question.findByPk(id, {
-      attributes: { exclude: null },
       include,
     });
 
@@ -121,8 +119,6 @@ const updateQuestion = async (req, res) => {
     await update(req, res);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
-    console.log("updateQuestion", errMsg);
-    return;
     return res.status(500).json({ message: errMsg });
   }
 };
@@ -150,9 +146,7 @@ const createQuestion = async (req, res) => {
     await create(req, res);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
-    console.log("createQuestion", errMsg);
-    return;
-    //return res.status(500).json({ message: errMsg });
+    return res.status(500).json({ message: errMsg });
   }
 };
 
