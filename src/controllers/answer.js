@@ -5,18 +5,18 @@ const { getAll, create, remove } = useController(Answer);
 const { checkValidAnswer } = require("../lib/common");
 
 const include = [
-  {
-    model: Question,
-    as: "question",
-    attributes: [
-      "id",
-      "name",
-      "match_id",
-      "start_time",
-      "end_time",
-      "question_data",
-    ],
-  },
+  // {
+  //   model: Question,
+  //   as: "question",
+  //   attributes: [
+  //     "id",
+  //     "name",
+  //     "match_id",
+  //     "start_time",
+  //     "end_time",
+  //     "question_data",
+  //   ],
+  // },
   {
     model: Team,
     as: "team",
@@ -111,6 +111,7 @@ const createAnswer = async (req, res) => {
         },
       ],
     });
+    console.log(question);
     if (!question)
       return res.status(404).json({ message: "Question not found" });
 
