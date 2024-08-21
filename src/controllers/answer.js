@@ -111,7 +111,6 @@ const createAnswer = async (req, res) => {
         },
       ],
     });
-    console.log(question);
     if (!question)
       return res.status(404).json({ message: "Question not found" });
 
