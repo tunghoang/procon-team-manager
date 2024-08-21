@@ -28,7 +28,7 @@ Answer.init(
       }*/
     },
     score_data: {
-      type: DataTypes.TEXT,
+      type: DataTypes.TEXT("long"),
     },
   },
   {

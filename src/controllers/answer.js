@@ -2,10 +2,7 @@ const got = require("got");
 const useController = require("../lib/useController");
 const { Answer, Question, Team, Match } = require("../models");
 const { getAll, create, remove } = useController(Answer);
-const { promisify } = require("node:util");
 const { checkValidAnswer } = require("../lib/common");
-const stream = require("node:stream");
-const pipeline = promisify(stream.pipeline);
 
 const include = [
   {
@@ -127,16 +124,15 @@ const createAnswer = async (req, res) => {
       },
     });
 
-    const response = await got
-      .post(`${process.env.SERVICE_API}/answer`, {
-        json: {
-          question: JSON.parse(question.question_data),
-          answer_data,
-        },
-      })
-      .json();
-
     if (!answer) {
+      const response = await got
+        .post(`${process.env.SERVICE_API}/answer`, {
+          json: {
+            question: JSON.parse(question.question_data),
+            answer_data,
+          },
+        })
+        .json();
       response.penalties = 0;
       req.body.score_data = JSON.stringify(response);
       req.body.answer_data = JSON.stringify(answer_data);
@@ -145,10 +141,19 @@ const createAnswer = async (req, res) => {
       await create(req, res);
     } else {
       penalties = JSON.parse(answer.score_data).penalties;
-      if (penalties > 30)
-        return res
-          .state(429)
-          .json({ message: "Maximum number of changes exceeded" });
+      // if (penalties > 30)
+      //   return res
+      //     .status(429)
+      //     .json({ message: "Maximum number of changes exceeded" });
+
+      const response = await got
+        .post(`${process.env.SERVICE_API}/answer`, {
+          json: {
+            question: JSON.parse(question.question_data),
+            answer_data,
+          },
+        })
+        .json();
 
       response.penalties = penalties + 1;
       response.final_score -= response.penalties;
