@@ -5,18 +5,18 @@ const { getAll, create, remove } = useController(Answer);
 const { checkValidAnswer } = require("../lib/common");
 
 const include = [
-  // {
-  //   model: Question,
-  //   as: "question",
-  //   attributes: [
-  //     "id",
-  //     "name",
-  //     "match_id",
-  //     "start_time",
-  //     "end_time",
-  //     "question_data",
-  //   ],
-  // },
+  {
+    model: Question,
+    as: "question",
+    attributes: [
+      "id",
+      "name",
+      "match_id",
+      "start_time",
+      "end_time",
+      // "question_data",
+    ],
+  },
   {
     model: Team,
     as: "team",
