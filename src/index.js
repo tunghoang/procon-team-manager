@@ -35,6 +35,7 @@ app.get("/questions", serveIndexHtml);
 app.get("/answers", serveIndexHtml);
 app.get("/rounds", serveIndexHtml);
 app.get("/competition", serveIndexHtml);
+app.get("/login", serveIndexHtml);
 
 app.use(express.json());
 app.use(cors());

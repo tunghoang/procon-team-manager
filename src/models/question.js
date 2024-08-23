@@ -21,7 +21,7 @@ Question.init(
       type: DataTypes.DATE,
     },
     question_data: {
-      type: DataTypes.TEXT,
+      type: DataTypes.TEXT('long'),
     },
   },
   {

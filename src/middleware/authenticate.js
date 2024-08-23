@@ -24,7 +24,7 @@ const authenticate = (req, res, next) => {
         return res.status(401).json({ message: "Unauthorized" });
       } else {
         req.auth = decoded;
-        console.log(decoded);
+        console.log("INFO:", req.originalUrl, decoded);
         if (req.auth.id === 0 && req.auth.is_admin) {
           next();
           return;
