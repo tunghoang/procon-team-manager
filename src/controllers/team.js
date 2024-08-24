@@ -78,9 +78,7 @@ const signin = async (req, res) => {
     if (!team) return res.status(404).json({ message: "Account not found" });
     const isMatch = await comparePassword(password, team.password);
     if (!isMatch)
-      return res
-        .status(400)
-        .json({ message: "Account or password not matched" });
+      return res.status(400).json({ message: "Account or password error" });
 
     const token = jwt.sign(
       {
@@ -112,13 +110,32 @@ const createTeam = async (req, res) => {
       },
     });
     if (team)
-      return res
-        .status(400)
-        .json({ message: `Account or Name has already existed` });
+      return res.status(400).json({ message: `Account has already existed` });
 
     req.body.password = await encryptPassword(req.body.password);
     if (!req.auth?.is_admin) req.body.is_admin = false;
     await create(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const team = await Team.findByPk(req.auth.id);
+
+    if (!team) return res.status(404).json({ message: "Team not found" });
+
+    if (!req.body.password)
+      return res.status(406).json({ message: "password invalid" });
+
+    const newPassword = await encryptPassword(req.body.password);
+
+    team.password = newPassword;
+
+    await team.save();
+
+    return res.status(200).json({ id: team.id });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -131,4 +148,5 @@ module.exports = {
   getTeam,
   updateTeam,
   removeTeam,
+  changePassword,
 };
