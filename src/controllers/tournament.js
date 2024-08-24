@@ -9,6 +9,8 @@ const getTournament = async (req, res) => {
 };
 
 const createTournament = async (req, res) => {
+  const tour = await Tournament.findOne({ where: { name: req.body.name } });
+  if (tour) return res.status(400).json({ message: "Duplicated name" });
   await create(req, res);
 };
 

@@ -18,10 +18,12 @@ const getRounds = async (req, res) => {
 };
 
 const getRound = async (req, res) => {
-  await get(req, res, null, null);
+  await get(req, res);
 };
 
 const createRound = async (req, res) => {
+  const round = await Round.findOne({ where: { name: req.body.name } });
+  if (round) return res.status(400).json({ message: "Duplicated name" });
   await create(req, res);
 };
 

@@ -48,11 +48,10 @@ const filterField = {
 };
 
 const getMatches = async (req, res) => {
-  const { is_admin, id, name } = req.auth;
-  if (!is_admin && name !== 'admin')
+  if (!req.auth.is_admin)
     req.query.teams = {
       ...req.query.teams,
-      eq_id: id,
+      eq_id: req.auth.id,
     };
   await getAll(req, res, null, include, filterField);
 };
@@ -67,12 +66,11 @@ const getMatch = async (req, res) => {
         message: `Match not found`,
       });
     }
-    
-    const {id: authId, is_admin, name} = req.auth;
-    const team = match.teams.find((team) => team.id === authId);
-    if (!team && !is_admin && name !== 'admin')
+
+    const team = match.teams.find((team) => team.id === req.auth.id);
+    if (!team && !req.auth.is_admin)
       return res.status(405).json({
-        message: "Not Allowed",
+        message: "Not allowed",
       });
 
     return res.status(200).json(match);
@@ -82,7 +80,14 @@ const getMatch = async (req, res) => {
 };
 
 const createMatch = async (req, res) => {
-  await create(req, res);
+  try {
+    const match = await Match.findOne({ where: { name: req.body.name } });
+    if (match) return res.status(400).json({ message: "Duplicated name" });
+
+    await create(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const updateMatch = async (req, res) => {

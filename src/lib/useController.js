@@ -10,7 +10,7 @@ const useController = (Model) => {
         include,
       });
       for (let row of data.rows) {
-        if (row.answer_data!=null && row.answer_data.length > 0) 
+        if (row.answer_data != null && row.answer_data.length > 0)
           row.answer_data = JSON.parse(row.answer_data);
       }
       return res.status(200).json({ count: data.count, data: data.rows });
@@ -18,7 +18,7 @@ const useController = (Model) => {
       return res.status(500).json({ message: error.message });
     }
   };
-  const get = async (req, res, ignore, include, filterField) => {
+  const get = async (req, res, ignore, include) => {
     const id = req.params.id;
     try {
       const data = await Model.findByPk(id, {

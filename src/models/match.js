@@ -26,11 +26,6 @@ Match.init(
     sequelize,
     modelName: "Match",
     tableName: "match",
-    // uniqueKeys: {
-    //   Items_unique: {
-    //     fields: ["name", "round_id"],
-    //   },
-    // },
     indexes: [{ unique: true, fields: ["name", "round_id"] }],
   }
 );
