@@ -5,7 +5,6 @@ const skipList = [
   "/skip-route",
   "/team/signin",
   "/team/signup",
-  "/download/resource",
 ];
 
 const authenticate = (req, res, next) => {
@@ -31,7 +30,6 @@ const authenticate = (req, res, next) => {
         }
         const team = await Team.findByPk(req.auth.id);
         if (!team) return res.status(401).json({ message: "Unauthorized" });
-        req.auth.is_admin = team.is_admin;
         next();
       }
     });
