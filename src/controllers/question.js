@@ -142,6 +142,9 @@ const createQuestion = async (req, res) => {
           w: req.body.width || 32,
           h: req.body.height || 32,
           p: req.body.p || 2,
+          mode: req.body.mode || 0,
+          ndie: req.body.ndie || 1,
+          niter: req.body.niter || 2,
         },
       })
       .json();
