@@ -85,7 +85,7 @@ const getAnswer = async (req, res) => {
   try {
     const data = await Answer.findByPk(id, {
       attributes: {
-        exclude: ignore,
+        // exclude: ignore,
       },
       include,
     });
