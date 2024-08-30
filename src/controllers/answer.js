@@ -148,7 +148,7 @@ const createAnswer = async (req, res) => {
       req.body.match_id = question.match_id;
       await create(req, res);
     } else {
-      resubmissions = JSON.parse(answer.score_data).resubmission_count;
+      resubmissions = JSON.parse(answer.score_data).resubmission_count || 0;
       // if (resubmissions > 100)
       //   return res
       //     .status(429)
