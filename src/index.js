@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
 function serveIndexHtml(req, res) {
   res.sendFile("index.html", {
-    root: path.join(__dirname, "./build/"),
+    root: path.join(__dirname, "../build/"),
   });
 }
 
