@@ -140,15 +140,16 @@ const createAnswer = async (req, res) => {
           },
         })
         .json();
-      response.penalties = 0;
+      response.resubmission_count = 0;
+      response.resubmission_penalty = 0;
       req.body.score_data = JSON.stringify(response);
       req.body.answer_data = JSON.stringify(answer_data);
       req.body.team_id = teamId;
       req.body.match_id = question.match_id;
       await create(req, res);
     } else {
-      penalties = JSON.parse(answer.score_data).penalties;
-      // if (penalties > 30)
+      resubmissions = JSON.parse(answer.score_data).resubmission_count;
+      // if (resubmissions > 100)
       //   return res
       //     .status(429)
       //     .json({ message: "Maximum number of changes exceeded" });
@@ -162,8 +163,9 @@ const createAnswer = async (req, res) => {
         })
         .json();
 
-      response.penalties = penalties + 1;
-      response.final_score -= response.penalties;
+      response.resubmission_count = resubmissions + 1;
+      response.resubmission_penalty = response.resubmission_factor * response.resubmission_count;
+      response.final_score += response.resubmission_penalty;
       await answer.update({
         score_data: JSON.stringify(response),
         answer_data: JSON.stringify(answer_data),
