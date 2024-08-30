@@ -16,11 +16,11 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
 function serveIndexHtml(req, res) {
   res.sendFile("index.html", {
-    root: path.join(__dirname, "../../procon-react/build/"),
+    root: path.join(__dirname, "./build/"),
   });
 }
 
-app.use("/", express.static("../procon-react/build"));
+app.use("/", express.static("./build"));
 app.get("/rounds/*", serveIndexHtml);
 app.get("/matches/*", serveIndexHtml);
 app.get("/teams/*", serveIndexHtml);
