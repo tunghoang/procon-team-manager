@@ -22,7 +22,9 @@ const getRound = async (req, res) => {
 };
 
 const createRound = async (req, res) => {
-  const round = await Round.findOne({ where: { name: req.body.name } });
+  const round = await Round.findOne({
+    where: { name: req.body.name, tournament_id: req.body.tournament_id },
+  });
   if (round) return res.status(400).json({ message: "Duplicated name" });
   await create(req, res);
 };

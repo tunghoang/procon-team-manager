@@ -81,9 +81,10 @@ const getMatch = async (req, res) => {
 
 const createMatch = async (req, res) => {
   try {
-    const match = await Match.findOne({ where: { name: req.body.name } });
+    const match = await Match.findOne({
+      where: { name: req.body.name, round_id: req.body.round_id },
+    });
     if (match) return res.status(400).json({ message: "Duplicated name" });
-
     await create(req, res);
   } catch (error) {
     return res.status(500).json({ message: error.message });

@@ -133,7 +133,9 @@ const createQuestion = async (req, res) => {
       return res.status(406).json({ message: "match_id invalid" });
     }
 
-    const question = await Question.findOne({ where: { name: req.body.name } });
+    const question = await Question.findOne({
+      where: { name: req.body.name, match_id: req.body.match_id },
+    });
     if (question) return res.status(400).json({ message: "Duplicated name" });
 
     const response = await got
