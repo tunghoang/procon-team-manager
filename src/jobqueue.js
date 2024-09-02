@@ -1,5 +1,6 @@
 const Queue = require("bee-queue");
 const { Answer, Question } = require("./models");
+const got = require("got");
 
 const options = {
   removeOnSuccess: true,
@@ -20,10 +21,9 @@ const addAnswer = (answer) => {
 
 answerQueue.process(JOB_CONCURRENT, async (job, done) => {
   try {
+    console.log(`Job ${job.id} starts processing`);
     const { scoreData, answerData, questionId, answerId } = job.data;
-
     const question = await Question.findByPk(questionId);
-
     const res = await got
       .post(`${process.env.SERVICE_API}/answer`, {
         json: {
@@ -42,18 +42,18 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
       score_data: JSON.stringify(newScoreData),
       answer_data: JSON.stringify(answerData),
     });
-    done(null, `Answer with ID ${answerId} done`);
+    return Promise.resolve(`Answer with ID ${answerId} done`);
   } catch (err) {
-    done(err);
+    return Promise.reject(err);
   }
 });
 
 answerQueue.on("succeeded", (job, result) => {
-  console.log(`Job ${job.id} succeeded:`, result);
+  console.log(`Job ${job.id} succeeded with result:`, result);
 });
 
-answerQueue.on("error", (err) => {
-  console.log("A queue error happened:", err.message);
+answerQueue.on("failed", (job, err) => {
+  console.log(`Job ${job.id} failed with error:`, err.message);
 });
 
 module.exports = { answerQueue, addAnswer };
