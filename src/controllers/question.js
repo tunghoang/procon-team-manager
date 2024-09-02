@@ -13,6 +13,8 @@ const include = [
   },
 ];
 
+const ignore = ["start_time", "end_time"];
+
 const filterField = {
   match_id: {
     field: "id",
@@ -54,6 +56,9 @@ const getQuestions = async (req, res) => {
   try {
     let questions = await Question.findAll({
       where: getFilter(req.query, filterField),
+      attributes: {
+        exclude: ignore,
+      },
       include,
     });
 
@@ -83,6 +88,9 @@ const getQuestion = async (req, res) => {
   const id = req.params.id;
   try {
     const question = await Question.findByPk(id, {
+      attributes: {
+        exclude: ignore,
+      },
       include,
     });
 
