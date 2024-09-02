@@ -131,6 +131,8 @@ const createAnswer = async (req, res) => {
       },
     });
 
+    // const scoreData = JSON.parse(answer?.score_data || "{}");
+
     const response = await got
       .post(`${process.env.SERVICE_API}/validate`, {
         json: {
@@ -140,11 +142,14 @@ const createAnswer = async (req, res) => {
       })
       .json();
 
-    const resubmissions =
-      JSON.parse(answer?.score_data || "{}").resubmission_count ?? -1;
-    response.resubmission_count = resubmissions + 1;
-    response.resubmission_penalty =
-      response.resubmission_factor * response.resubmission_count;
+    const scoreData = {
+      ...JSON.parse(answer?.score_data || "{}"),
+      ...response,
+    };
+
+    scoreData.resubmission_count = (scoreData.resubmission_count ?? -1) + 1;
+    scoreData.resubmission_penalty =
+      scoreData.resubmission_factor * scoreData.resubmission_count;
 
     got
       .post(`${process.env.SERVICE_API}/answer`, {
@@ -155,10 +160,10 @@ const createAnswer = async (req, res) => {
       })
       .json()
       .then(async (res) => {
-        const scoreData = { ...res, ...response };
-        scoreData.final_score += scoreData.resubmission_penalty;
+        const newScoreData = { ...scoreData, ...res };
+        newScoreData.final_score += newScoreData.resubmission_penalty;
         await answer.update({
-          score_data: JSON.stringify(scoreData),
+          score_data: JSON.stringify(newScoreData),
           answer_data: JSON.stringify(answer_data),
         });
       })
@@ -167,14 +172,14 @@ const createAnswer = async (req, res) => {
       });
 
     if (!answer) {
-      req.body.score_data = JSON.stringify(response);
+      req.body.score_data = JSON.stringify(scoreData);
       req.body.answer_data = JSON.stringify(answer_data);
       req.body.team_id = teamId;
       req.body.match_id = question.match_id;
       await create(req, res);
     } else {
       await answer.update({
-        score_data: JSON.stringify(response),
+        score_data: JSON.stringify(scoreData),
         answer_data: JSON.stringify(answer_data),
       });
       return res.status(200).json({
