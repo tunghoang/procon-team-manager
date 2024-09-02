@@ -2,7 +2,7 @@ const got = require("got");
 const useController = require("../lib/useController");
 const { Match, Question } = require("../models");
 const { update, create, remove } = useController(Question);
-const { getFilter } = require("../lib/common");
+const { getFilter, getServiceApi } = require("../lib/common");
 const { sequelize } = require("../models");
 const { QueryTypes } = require("sequelize");
 
@@ -147,7 +147,7 @@ const createQuestion = async (req, res) => {
     if (question) return res.status(400).json({ message: "Duplicated name" });
 
     const response = await got
-      .get(`${process.env.SERVICE_API}/board`, {
+      .get(`${getServiceApi()}/board`, {
         searchParams: {
           w: req.body.width || 32,
           h: req.body.height || 32,

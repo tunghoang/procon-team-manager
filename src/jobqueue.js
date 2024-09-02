@@ -1,6 +1,7 @@
 const Queue = require("bee-queue");
 const { Answer, Question } = require("./models");
 const got = require("got");
+const { getServiceApi } = require("./lib/common");
 
 const options = {
   removeOnSuccess: true,
@@ -25,7 +26,7 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
     const { scoreData, answerData, questionId, answerId } = job.data;
     const question = await Question.findByPk(questionId);
     const res = await got
-      .post(`${process.env.SERVICE_API}/answer`, {
+      .post(`${getServiceApi()}/answer`, {
         json: {
           question: JSON.parse(question.question_data),
           answer_data: answerData,

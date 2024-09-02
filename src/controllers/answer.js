@@ -2,7 +2,7 @@ const got = require("got");
 const useController = require("../lib/useController");
 const { Answer, Question, Team, Match } = require("../models");
 const { getAll, create, remove } = useController(Answer);
-const { checkValidAnswer } = require("../lib/common");
+const { checkValidAnswer, getServiceApi } = require("../lib/common");
 const { addAnswer } = require("../jobqueue");
 
 const include = [
@@ -124,7 +124,7 @@ const createAnswer = async (req, res) => {
     });
 
     const response = await got
-      .post(`${process.env.SERVICE_API}/validate`, {
+      .post(`${getServiceApi()}/validate`, {
         json: {
           question: JSON.parse(question.question_data),
           answer_data: answerData,

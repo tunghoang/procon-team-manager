@@ -40,4 +40,10 @@ const checkValidAnswer = async (match, teamId) => {
   return message;
 };
 
-module.exports = { getFilter, checkValidAnswer };
+const getServiceApi = () => {
+  // Load balancing
+  const SERVICE_APIS = process.env.SERVICE_APIS;
+  return SERVICE_APIS[Math.floor(Math.random() * SERVICE_APIS.length)];
+};
+
+module.exports = { getFilter, checkValidAnswer, getServiceApi };
