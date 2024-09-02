@@ -9,14 +9,7 @@ const include = [
   {
     model: Question,
     as: "question",
-    attributes: [
-      "id",
-      "name",
-      "match_id",
-      "start_time",
-      "end_time",
-      // "question_data",
-    ],
+    attributes: ["id", "name", "match_id"],
   },
   {
     model: Team,
@@ -85,9 +78,6 @@ const getAnswer = async (req, res) => {
   const id = req.params.id;
   try {
     const data = await Answer.findByPk(id, {
-      attributes: {
-        // exclude: ignore,
-      },
       include,
     });
 
@@ -123,7 +113,7 @@ const createAnswer = async (req, res) => {
     if (!question)
       return res.status(404).json({ message: "Question not found" });
 
-    let message = await checkValidAnswer(question, teamId);
+    const message = await checkValidAnswer(question.match, teamId);
     if (message) return res.status(405).json({ message });
 
     const answer = await Answer.findOne({

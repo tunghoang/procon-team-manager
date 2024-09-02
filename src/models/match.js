@@ -17,6 +17,12 @@ Match.init(
     description: {
       type: DataTypes.TEXT,
     },
+    start_time: {
+      type: DataTypes.DATE,
+    },
+    end_time: {
+      type: DataTypes.DATE,
+    },
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

@@ -238,6 +238,28 @@
         }
       }
     },
+    "Match": {
+      "required": ["name"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "is_active": {
+          "type": "boolean"
+        }
+      }
+    },
     "Question": {
       "required": ["name"],
       "properties": {
