@@ -3,6 +3,7 @@ const useController = require("../lib/useController");
 const { Answer, Question, Team, Match } = require("../models");
 const { getAll, create, remove } = useController(Answer);
 const { checkValidAnswer } = require("../lib/common");
+const { addAnswer } = require("../jobqueue");
 
 const include = [
   {
@@ -109,8 +110,9 @@ const removeAnswer = async (req, res) => {
 const createAnswer = async (req, res) => {
   try {
     const teamId = req.auth.id;
-    const { question_id, answer_data } = req.body;
-    const question = await Question.findByPk(question_id, {
+    const { question_id: questionId, answer_data: answerData } = req.body;
+
+    const question = await Question.findByPk(questionId, {
       include: [
         {
           model: Match,
@@ -127,17 +129,15 @@ const createAnswer = async (req, res) => {
     const answer = await Answer.findOne({
       where: {
         team_id: teamId,
-        question_id,
+        question_id: questionId,
       },
     });
-
-    // const scoreData = JSON.parse(answer?.score_data || "{}");
 
     const response = await got
       .post(`${process.env.SERVICE_API}/validate`, {
         json: {
           question: JSON.parse(question.question_data),
-          answer_data,
+          answer_data: answerData,
         },
       })
       .json();
@@ -151,36 +151,24 @@ const createAnswer = async (req, res) => {
     scoreData.resubmission_penalty =
       scoreData.resubmission_factor * scoreData.resubmission_count;
 
-    got
-      .post(`${process.env.SERVICE_API}/answer`, {
-        json: {
-          question: JSON.parse(question.question_data),
-          answer_data,
-        },
-      })
-      .json()
-      .then(async (res) => {
-        const newScoreData = { ...scoreData, ...res };
-        newScoreData.final_score += newScoreData.resubmission_penalty;
-        await answer.update({
-          score_data: JSON.stringify(newScoreData),
-          answer_data: JSON.stringify(answer_data),
-        });
-      })
-      .catch((err) => {
-        console.log("Answer Service Error", err);
-      });
+    // add to answer queue
+    addAnswer({
+      scoreData,
+      answerData,
+      questionId,
+      answerId: answer?.id,
+    });
 
     if (!answer) {
       req.body.score_data = JSON.stringify(scoreData);
-      req.body.answer_data = JSON.stringify(answer_data);
+      req.body.answer_data = JSON.stringify(answerData);
       req.body.team_id = teamId;
       req.body.match_id = question.match_id;
       await create(req, res);
     } else {
       await answer.update({
         score_data: JSON.stringify(scoreData),
-        answer_data: JSON.stringify(answer_data),
+        answer_data: JSON.stringify(answerData),
       });
       return res.status(200).json({
         id: answer.id,

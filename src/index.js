@@ -7,6 +7,7 @@ const cors = require("cors");
 const { authenticate } = require("./middleware/authenticate");
 const routes = require("./routes");
 require("./docs.js")("/docs", app);
+require("./jobqueue.js");
 
 const bodyParser = require("body-parser");
 app.use(bodyParser.json({ limit: "50mb" }));
