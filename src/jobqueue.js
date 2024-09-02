@@ -1,6 +1,6 @@
 const Queue = require("bee-queue");
-const { Answer, Question } = require("./models");
 const got = require("got");
+const { Answer, Question } = require("./models");
 const { getServiceApi } = require("./lib/common");
 
 const options = {

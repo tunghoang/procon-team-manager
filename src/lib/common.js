@@ -42,7 +42,7 @@ const checkValidAnswer = async (match, teamId) => {
 
 const getServiceApi = () => {
   // Load balancing
-  const SERVICE_APIS = process.env.SERVICE_APIS;
+  const SERVICE_APIS = JSON.parse(process.env.SERVICE_APIS || '[]');
   return SERVICE_APIS[Math.floor(Math.random() * SERVICE_APIS.length)];
 };
 
