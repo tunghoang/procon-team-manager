@@ -131,41 +131,48 @@ const createAnswer = async (req, res) => {
       },
     });
 
+    const response = await got
+      .post(`${process.env.SERVICE_API}/validate`, {
+        json: {
+          question: JSON.parse(question.question_data),
+          answer_data,
+        },
+      })
+      .json();
+
+    const resubmissions =
+      JSON.parse(answer?.score_data || "{}").resubmission_count ?? -1;
+    response.resubmission_count = resubmissions + 1;
+    response.resubmission_penalty =
+      response.resubmission_factor * response.resubmission_count;
+
+    got
+      .post(`${process.env.SERVICE_API}/answer`, {
+        json: {
+          question: JSON.parse(question.question_data),
+          answer_data,
+        },
+      })
+      .json()
+      .then(async (res) => {
+        const scoreData = { ...res, ...response };
+        scoreData.final_score += scoreData.resubmission_penalty;
+        await answer.update({
+          score_data: JSON.stringify(scoreData),
+          answer_data: JSON.stringify(answer_data),
+        });
+      })
+      .catch((err) => {
+        console.log("Answer Service Error", err);
+      });
+
     if (!answer) {
-      const response = await got
-        .post(`${process.env.SERVICE_API}/answer`, {
-          json: {
-            question: JSON.parse(question.question_data),
-            answer_data,
-          },
-        })
-        .json();
-      response.resubmission_count = 0;
-      response.resubmission_penalty = 0;
       req.body.score_data = JSON.stringify(response);
       req.body.answer_data = JSON.stringify(answer_data);
       req.body.team_id = teamId;
       req.body.match_id = question.match_id;
       await create(req, res);
     } else {
-      resubmissions = JSON.parse(answer.score_data).resubmission_count || 0;
-      // if (resubmissions > 100)
-      //   return res
-      //     .status(429)
-      //     .json({ message: "Maximum number of changes exceeded" });
-
-      const response = await got
-        .post(`${process.env.SERVICE_API}/answer`, {
-          json: {
-            question: JSON.parse(question.question_data),
-            answer_data,
-          },
-        })
-        .json();
-
-      response.resubmission_count = resubmissions + 1;
-      response.resubmission_penalty = response.resubmission_factor * response.resubmission_count;
-      response.final_score += response.resubmission_penalty;
       await answer.update({
         score_data: JSON.stringify(response),
         answer_data: JSON.stringify(answer_data),
