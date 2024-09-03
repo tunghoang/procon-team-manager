@@ -12,7 +12,7 @@ const options = {
   },
 };
 
-const JOB_CONCURRENT = 1;
+const JOB_CONCURRENT = 2;
 
 const answerQueue = new Queue("answer", options);
 

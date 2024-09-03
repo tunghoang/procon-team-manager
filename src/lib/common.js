@@ -40,10 +40,18 @@ const checkValidAnswer = async (match, teamId) => {
   return message;
 };
 
-const getServiceApi = () => {
-  // Load balancing
+let loadTurn = 0;
+const getServiceApi = (mode='roundrobin') => {
   const SERVICE_APIS = JSON.parse(process.env.SERVICE_APIS || '[]');
-  return SERVICE_APIS[Math.floor(Math.random() * SERVICE_APIS.length)];
+  let url = SERVICE_APIS[0];
+  // Load balancing
+  if (mode === 'random') {
+    url = SERVICE_APIS[Math.floor(Math.random() * SERVICE_APIS.length)];
+  } else if (mode === 'roundrobin') {
+    url = SERVICE_APIS[loadTurn];
+    loadTurn = (loadTurn + 1) % SERVICE_APIS.length;
+  }
+  return url
 };
 
 module.exports = { getFilter, checkValidAnswer, getServiceApi };
