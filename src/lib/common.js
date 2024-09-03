@@ -41,7 +41,7 @@ const checkValidAnswer = async (match, teamId) => {
 };
 
 let loadTurn = 0;
-const getServiceApi = (mode) => {
+const getServiceApi = (mode='roundrobin') => {
   // Load balancing
   const SERVICE_APIS = JSON.parse(process.env.SERVICE_APIS || '[]');
   let url;
