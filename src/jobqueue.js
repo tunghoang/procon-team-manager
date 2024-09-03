@@ -12,7 +12,7 @@ const options = {
   },
 };
 
-const JOB_CONCURRENT = 2;
+const JOB_CONCURRENT = process.env.JOB_CONCURRENT;
 
 const answerQueue = new Queue("answer", options);
 

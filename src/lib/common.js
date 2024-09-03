@@ -41,15 +41,17 @@ const checkValidAnswer = async (match, teamId) => {
 };
 
 let loadTurn = 0;
-const getServiceApi = (mode='roundrobin') => {
-  const SERVICE_APIS = JSON.parse(process.env.SERVICE_APIS || '[]');
-  let url = SERVICE_APIS[0];
+const getServiceApi = (mode) => {
   // Load balancing
+  const SERVICE_APIS = JSON.parse(process.env.SERVICE_APIS || '[]');
+  let url;
   if (mode === 'random') {
     url = SERVICE_APIS[Math.floor(Math.random() * SERVICE_APIS.length)];
   } else if (mode === 'roundrobin') {
     url = SERVICE_APIS[loadTurn];
     loadTurn = (loadTurn + 1) % SERVICE_APIS.length;
+  } else {
+    url = SERVICE_APIS[0];
   }
   return url
 };
