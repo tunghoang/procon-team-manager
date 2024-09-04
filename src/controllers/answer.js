@@ -163,7 +163,7 @@ const createAnswer = async (req, res) => {
       scoreData,
       answerData,
       questionData,
-      answerId: answer?.id,
+      answerId: answer.id,
     });
 
     return res.status(200).json({
