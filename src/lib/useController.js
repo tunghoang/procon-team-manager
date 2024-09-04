@@ -18,6 +18,7 @@ const useController = (Model) => {
       return res.status(500).json({ message: error.message });
     }
   };
+
   const get = async (req, res, ignore, include) => {
     const id = req.params.id;
     try {

@@ -116,54 +116,55 @@ const createAnswer = async (req, res) => {
     const message = await checkValidAnswer(question.match, teamId);
     if (message) return res.status(405).json({ message });
 
-    const answer = await Answer.findOne({
-      where: {
-        team_id: teamId,
-        question_id: questionId,
-      },
-    });
-
+    const questionData = JSON.parse(question.question_data);
     const response = await got
       .post(`${getServiceApi()}/validate`, {
         json: {
-          question: JSON.parse(question.question_data),
+          question: questionData,
           answer_data: answerData,
         },
       })
       .json();
 
+    let answer = await Answer.findOne({
+      where: {
+        team_id: teamId,
+        question_id: questionId,
+      },
+    });
     const scoreData = {
       ...JSON.parse(answer?.score_data || "{}"),
       ...response,
     };
-
     scoreData.resubmission_count = (scoreData.resubmission_count ?? -1) + 1;
     scoreData.resubmission_penalty =
       scoreData.resubmission_factor * scoreData.resubmission_count;
-
-    // add to answer queue
-    addAnswer({
-      scoreData,
-      answerData,
-      questionId,
-      answerId: answer?.id,
-    });
+    scoreData.status = "pending";
 
     if (!answer) {
       req.body.score_data = JSON.stringify(scoreData);
       req.body.answer_data = JSON.stringify(answerData);
       req.body.team_id = teamId;
       req.body.match_id = question.match_id;
-      await create(req, res);
+      answer = await Answer.create(req.body);
     } else {
       await answer.update({
         score_data: JSON.stringify(scoreData),
         answer_data: JSON.stringify(answerData),
       });
-      return res.status(200).json({
-        id: answer.id,
-      });
     }
+
+    // add to answer queue
+    addAnswer({
+      scoreData,
+      answerData,
+      questionData,
+      answerId: answer?.id,
+    });
+
+    return res.status(200).json({
+      id: answer.id,
+    });
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
     return res.status(500).json({ message: errMsg });
