@@ -141,9 +141,12 @@ const createAnswer = async (req, res) => {
       scoreData.resubmission_factor * scoreData.resubmission_count;
     scoreData.status = "pending";
 
+    const submitTime = new Date();
+
     if (!answer) {
       req.body.score_data = JSON.stringify(scoreData);
       req.body.answer_data = JSON.stringify(answerData);
+      req.body.submit_time = submitTime;
       req.body.team_id = teamId;
       req.body.match_id = question.match_id;
       answer = await Answer.create(req.body);
@@ -151,6 +154,7 @@ const createAnswer = async (req, res) => {
       await answer.update({
         score_data: JSON.stringify(scoreData),
         answer_data: JSON.stringify(answerData),
+        submit_time: submitTime
       });
     }
 
