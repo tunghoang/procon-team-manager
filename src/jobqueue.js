@@ -26,7 +26,7 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
     const { scoreData, answerData, questionId, answerId } = job.data;
     const question = await Question.findByPk(questionId);
     const res = await got
-      .post(`${getServiceApi()}/answer`, {
+      .post(`${getServiceApi('roundrobin')}/answer`, {
         json: {
           question: JSON.parse(question.question_data),
           answer_data: answerData,
