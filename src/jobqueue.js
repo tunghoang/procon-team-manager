@@ -25,6 +25,10 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
   const { scoreData, answerData, questionData, answerId } = job.data;
   const answer = await Answer.findByPk(answerId);
   try {
+    scoreData.status = "pending";
+    await answer.update({
+      score_data: JSON.stringify(scoreData),
+    });
     const res = await got
       .post(`${getServiceApi()}/answer`, {
         json: {
