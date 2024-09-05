@@ -16,7 +16,7 @@ Answer.init(
     score_data: {
       type: DataTypes.TEXT("long"),
     },
-    submit_time: {
+    submitted_time: {
       type: DataTypes.DATE,
     },
   },
