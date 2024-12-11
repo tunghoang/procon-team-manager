@@ -1,4 +1,5 @@
 const got = require("got");
+const crypto = require("crypto");
 const useController = require("../lib/useController");
 const { Answer, Question, Team, Match } = require("../models");
 const { getAll, create, remove } = useController(Answer);
@@ -97,6 +98,12 @@ const removeAnswer = async (req, res) => {
   await remove(req, res);
 };
 
+const rateLimit = {};
+
+const hash = (name) => {
+  return crypto.createHash('md5').update(name).digest('hex');
+}
+
 const createAnswer = async (req, res) => {
   try {
     const teamId = req.auth.id;
@@ -115,6 +122,22 @@ const createAnswer = async (req, res) => {
 
     const message = await checkValidAnswer(question.match, teamId);
     if (message) return res.status(405).json({ message });
+
+    // rate limit
+    const rate = 15;
+    const rateId = hash(teamId.toString()) + hash(questionId.toString());
+    console.log(rateId);
+    if (!rateLimit[rateId]) {
+      rateLimit[rateId] = true;
+      setTimeout(() => {
+        rateLimit[rateId] = false;
+      }, rate * 1000)
+    } else {
+      return res.status(429).json({
+        message: `Rate limit: ${rate}s/req`
+      })
+    }
+
 
     const questionData = JSON.parse(question.question_data);
     const response = await got
