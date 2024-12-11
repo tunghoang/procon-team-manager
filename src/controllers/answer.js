@@ -126,7 +126,6 @@ const createAnswer = async (req, res) => {
     // rate limit
     const rate = 15;
     const rateId = hash(teamId.toString()) + hash(questionId.toString());
-    console.log(rateId);
     if (!rateLimit[rateId]) {
       rateLimit[rateId] = true;
       setTimeout(() => {
@@ -137,7 +136,6 @@ const createAnswer = async (req, res) => {
         message: `Rate limit: ${rate}s/req`
       })
     }
-
 
     const questionData = JSON.parse(question.question_data);
     const response = await got
