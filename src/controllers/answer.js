@@ -124,18 +124,21 @@ const createAnswer = async (req, res) => {
     if (message) return res.status(405).json({ message });
 
     // rate limit
-    const rate = 5;
-    const rateId = hash(teamId.toString()) + hash(questionId.toString());
-    if (!rateLimit[rateId]) {
-      rateLimit[rateId] = true;
-      setTimeout(() => {
-        rateLimit[rateId] = false;
-      }, rate * 1000)
-    } else {
-      return res.status(429).json({
-        message: `Rate limit: ${rate}s/req`
-      })
-    }
+	const RATE_WINDOW = 3 * 1000; // 3 seconds
+	const rateId = `${hash(teamId.toString())}:${hash(questionId.toString())}`;
+
+	if (rateLimit[rateId]) {
+	  return res.status(429).json({
+	    message: `Rate limit exceeded: 1 request every ${RATE_WINDOW / 1000}s`
+	  });
+	}
+
+	rateLimit[rateId] = true;
+
+	setTimeout(() => {
+	  delete rateLimit[rateId];
+	}, RATE_WINDOW);
+	// end rate limit
 
     const questionData = JSON.parse(question.question_data);
     const response = await got
