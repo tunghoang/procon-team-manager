@@ -124,7 +124,7 @@ const createAnswer = async (req, res) => {
     if (message) return res.status(405).json({ message });
 
     // rate limit
-    const rate = 15;
+    const rate = 5;
     const rateId = hash(teamId.toString()) + hash(questionId.toString());
     if (!rateLimit[rateId]) {
       rateLimit[rateId] = true;

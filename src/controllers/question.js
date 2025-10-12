@@ -149,12 +149,10 @@ const createQuestion = async (req, res) => {
     const response = await got
       .get(`${getServiceApi()}/board`, {
         searchParams: {
-          w: req.body.width || 32,
-          h: req.body.height || 32,
-          p: req.body.p || 2,
+          size: req.body.size || 12,
           mode: req.body.mode || 0,
-          ndie: req.body.ndie || 1,
-          niter: req.body.niter || 2,
+          max_ops: req.body.max_ops || 2,
+          rotations: req.body.roations || 3,
         },
       })
       .json();

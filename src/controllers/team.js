@@ -57,7 +57,7 @@ const removeTeam = async (req, res) => {
 
 const signin = async (req, res) => {
   const { account, password } = req.body;
-  if (account === "admin" && password === "ProconVN@#24") {
+  if (account === "admin" && password === "uetbmm") {
     const token = jwt.sign(
       {
         id: 0,
