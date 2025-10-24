@@ -13,6 +13,8 @@ const bodyParser = require("body-parser");
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 
+app.set('trust proxy', true); // Get IP from X-Forwarded-For header
+
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
 function serveIndexHtml(req, res) {
