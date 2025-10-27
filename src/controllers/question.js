@@ -152,7 +152,7 @@ const createQuestion = async (req, res) => {
           size: req.body.size || 12,
           mode: req.body.mode || 0,
           max_ops: req.body.max_ops || 2,
-          rotations: req.body.roations || 3,
+          rotations: req.body.rotations || 3,
         },
       })
       .json();
