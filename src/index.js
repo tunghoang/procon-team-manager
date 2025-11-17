@@ -17,28 +17,30 @@ app.set('trust proxy', true); // Get IP from X-Forwarded-For header
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
-function serveIndexHtml(req, res) {
-  res.sendFile("index.html", {
-    root: path.join(__dirname, "../build/"),
-  });
-}
+if (process.env.NODE_ENV !== "staging") {
+  function serveIndexHtml(req, res) {
+    res.sendFile("index.html", {
+      root: path.join(__dirname, "../build/"),
+    });
+  }
 
-app.use("/", express.static("./build"));
-app.get("/rounds/*", serveIndexHtml);
-app.get("/matches/*", serveIndexHtml);
-app.get("/teams/*", serveIndexHtml);
-app.get("/questions/*", serveIndexHtml);
-app.get("/answers/*", serveIndexHtml);
-app.get("/rounds/*", serveIndexHtml);
-app.get("/competition/*", serveIndexHtml);
-app.get("/rounds", serveIndexHtml);
-app.get("/matches", serveIndexHtml);
-app.get("/teams", serveIndexHtml);
-app.get("/questions", serveIndexHtml);
-app.get("/answers", serveIndexHtml);
-app.get("/rounds", serveIndexHtml);
-app.get("/competition", serveIndexHtml);
-app.get("/login", serveIndexHtml);
+  app.use("/", express.static("./build"));
+  app.get("/rounds/*", serveIndexHtml);
+  app.get("/matches/*", serveIndexHtml);
+  app.get("/teams/*", serveIndexHtml);
+  app.get("/questions/*", serveIndexHtml);
+  app.get("/answers/*", serveIndexHtml);
+  app.get("/rounds/*", serveIndexHtml);
+  app.get("/competition/*", serveIndexHtml);
+  app.get("/rounds", serveIndexHtml);
+  app.get("/matches", serveIndexHtml);
+  app.get("/teams", serveIndexHtml);
+  app.get("/questions", serveIndexHtml);
+  app.get("/answers", serveIndexHtml);
+  app.get("/rounds", serveIndexHtml);
+  app.get("/competition", serveIndexHtml);
+  app.get("/login", serveIndexHtml);
+}
 
 app.use(express.json());
 app.use(cors());
