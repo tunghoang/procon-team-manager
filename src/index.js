@@ -43,7 +43,10 @@ if (process.env.NODE_ENV !== "staging") {
 }
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
 app.use(authenticate);
 
 for (const route in routes) {
