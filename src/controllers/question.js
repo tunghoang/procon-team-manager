@@ -146,17 +146,21 @@ const createQuestion = async (req, res) => {
     });
     if (question) return res.status(400).json({ message: "Duplicated name" });
 
-    const response = await got
-      .get(`${getServiceApi()}/board`, {
-        searchParams: {
-          size: req.body.size || 12,
-          mode: req.body.mode || 0,
-          max_ops: req.body.max_ops || 2,
-          rotations: req.body.rotations || 3,
-        },
-      })
-      .json();
-    req.body.question_data = JSON.stringify(response);
+    if (req.body.type === "manual") {
+      req.body.question_data = JSON.stringify(req.body.raw_questions);
+    } else {
+      const response = await got
+        .get(`${getServiceApi()}/board`, {
+          searchParams: {
+            size: req.body.size || 12,
+            mode: req.body.mode || 0,
+            max_ops: req.body.max_ops || 2,
+            rotations: req.body.rotations || 3,
+          },
+        })
+        .json();
+      req.body.question_data = JSON.stringify(response);
+    }
     await create(req, res);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
