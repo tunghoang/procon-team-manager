@@ -147,7 +147,17 @@ const createQuestion = async (req, res) => {
     if (question) return res.status(400).json({ message: "Duplicated name" });
 
     if (req.body.type === "manual") {
-      req.body.question_data = JSON.stringify(req.body.raw_questions);
+      const size = req.body.raw_questions.length;
+      if (size < 4 || size > 24 || size % 2 !== 0) {
+        return res
+          .status(406)
+          .json({ message: "Invalid size of board" });
+      }
+      const field = {
+        size: req.body.raw_questions.length,
+        entities: req.body.raw_questions,
+      }
+      req.body.question_data = JSON.stringify({ field });
     } else {
       const response = await got
         .get(`${getServiceApi()}/board`, {
