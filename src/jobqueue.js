@@ -38,10 +38,17 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
       })
       .json();
 
-    const newScoreData = { ...scoreData, ...res };
+    console.log("Response from /answer:", res);
+    // Merge with response LAST to ensure factors from Python service take precedence
+    const newScoreData = {
+      ...res,
+      resubmission_count: scoreData.resubmission_count,
+      resubmission_penalty: scoreData.resubmission_penalty,
+      status: "done"
+    };
     newScoreData.final_score += newScoreData.resubmission_penalty;
-    newScoreData.status = "done";
-    
+    console.log("Final score data:", newScoreData);
+
     await answer.update({
       score_data: JSON.stringify(newScoreData),
     });
@@ -52,7 +59,7 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
       score_data: JSON.stringify(scoreData),
     });
     return Promise.reject(err);
-  } 
+  }
 });
 
 answerQueue.on("succeeded", (job, result) => {

@@ -124,23 +124,28 @@ const createAnswer = async (req, res) => {
     if (message) return res.status(405).json({ message });
 
     // rate limit
-	const RATE_WINDOW = 3 * 1000; // 3 seconds
-	const rateId = `${hash(teamId.toString())}:${hash(questionId.toString())}`;
+    const RATE_WINDOW = 3 * 1000; // 3 seconds
+    const rateId = `${hash(teamId.toString())}:${hash(questionId.toString())}`;
 
-	if (rateLimit[rateId]) {
-	  return res.status(429).json({
-	    message: `Rate limit exceeded: 1 request every ${RATE_WINDOW / 1000}s`
-	  });
-	}
+    if (rateLimit[rateId]) {
+      return res.status(429).json({
+        message: `Rate limit exceeded: 1 request every ${RATE_WINDOW / 1000}s`
+      });
+    }
 
-	rateLimit[rateId] = true;
+    rateLimit[rateId] = true;
 
-	setTimeout(() => {
-	  delete rateLimit[rateId];
-	}, RATE_WINDOW);
-	// end rate limit
+    setTimeout(() => {
+      delete rateLimit[rateId];
+    }, RATE_WINDOW);
+    // end rate limit
 
     const questionData = JSON.parse(question.question_data);
+    // Include scoring factors from the question (use defaults if null/undefined)
+    questionData.match_factor = question.match_factor ?? 1.0;
+    questionData.step_factor = question.step_factor ?? -0.05;
+    questionData.resub_factor = question.resub_factor ?? -10.0;
+
     const response = await got
       .post(`${getServiceApi()}/validate`, {
         json: {

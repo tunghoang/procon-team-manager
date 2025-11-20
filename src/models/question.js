@@ -23,6 +23,18 @@ Question.init(
     question_data: {
       type: DataTypes.TEXT('long'),
     },
+    match_factor: {
+      type: DataTypes.FLOAT,
+      defaultValue: 1.0,
+    },
+    step_factor: {
+      type: DataTypes.FLOAT,
+      defaultValue: -0.05,
+    },
+    resub_factor: {
+      type: DataTypes.FLOAT,
+      defaultValue: -10.0,
+    },
   },
   {
     sequelize,
