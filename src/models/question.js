@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require("sequelize");
 const sequelize = require("./dbInstance");
 
-class Question extends Model {}
+class Question extends Model { }
 
 Question.init(
   {
@@ -13,6 +13,10 @@ Question.init(
     name: {
       type: DataTypes.STRING,
       allowNull: false,
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     start_time: {
       type: DataTypes.DATE,
