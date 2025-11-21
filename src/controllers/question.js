@@ -60,6 +60,10 @@ const getQuestions = async (req, res) => {
         exclude: ignore,
       },
       include,
+      order: [
+        ['order', 'ASC'],
+        ['createdAt', 'ASC'],
+      ],
     });
 
     if (!isAdmin) {

@@ -39,6 +39,10 @@ Question.init(
       type: DataTypes.FLOAT,
       defaultValue: -10.0,
     },
+    order: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
   },
   {
     sequelize,
