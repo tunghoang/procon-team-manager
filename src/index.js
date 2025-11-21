@@ -47,6 +47,12 @@ app.use(cors({
   origin: true,
   credentials: true,
 }));
+
+// Health check endpoint (before authentication)
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "healthy" });
+});
+
 app.use(authenticate);
 
 for (const route in routes) {
