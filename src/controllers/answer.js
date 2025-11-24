@@ -1,7 +1,7 @@
 const got = require("got");
 const crypto = require("crypto");
 const useController = require("../lib/useController");
-const { Answer, Question, Team, Match } = require("../models");
+const { Answer, Question, Team, Match, Round } = require("../models");
 const { getAll, create, remove } = useController(Answer);
 const { checkValidAnswer, getServiceApi } = require("../lib/common");
 const { addAnswer } = require("../jobqueue");
@@ -20,6 +20,13 @@ const include = [
   {
     model: Match,
     as: "match",
+    include: [
+      {
+        model: Round,
+        as: "round",
+        attributes: ["id", "name"],
+      },
+    ],
   },
 ];
 

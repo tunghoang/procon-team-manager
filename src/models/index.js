@@ -122,6 +122,7 @@ module.exports = {
   sequelize,
   Team,
   Tournament,
+  Round,
   Match,
   Question,
   Answer,

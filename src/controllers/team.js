@@ -95,6 +95,7 @@ const signin = async (req, res) => {
 
     return res.status(200).json({
       id: team.id,
+      is_admin: team.is_admin,
       token,
     });
   } catch (error) {
