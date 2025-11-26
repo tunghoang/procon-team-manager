@@ -31,8 +31,8 @@ const filterField = {
     field: "is_active",
     op: "like",
   },
-  eq_tournament_id: {
-    field: "tournament_id",
+  eq_round_tournament_id: {
+    field: "$round.tournament_id$",
     op: "eq",
   },
   eq_round_id: {
