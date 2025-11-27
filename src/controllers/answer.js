@@ -148,10 +148,6 @@ const createAnswer = async (req, res) => {
     // end rate limit
 
     const questionData = JSON.parse(question.question_data);
-    // Include scoring factors from the question (use defaults if null/undefined)
-    questionData.match_factor = question.match_factor ?? 1.0;
-    questionData.step_factor = question.step_factor ?? -0.05;
-    questionData.resub_factor = question.resub_factor ?? -10.0;
 
     const response = await got
       .post(`${getServiceApi()}/validate`, {
@@ -173,8 +169,6 @@ const createAnswer = async (req, res) => {
       ...response,
     };
     scoreData.resubmission_count = (scoreData.resubmission_count ?? -1) + 1;
-    scoreData.resubmission_penalty =
-      scoreData.resubmission_factor * scoreData.resubmission_count;
     scoreData.status = "pending";
 
     const submittedTime = new Date();

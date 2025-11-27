@@ -43,10 +43,8 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
     const newScoreData = {
       ...res,
       resubmission_count: scoreData.resubmission_count,
-      resubmission_penalty: scoreData.resubmission_penalty,
       status: "done"
     };
-    newScoreData.final_score += newScoreData.resubmission_penalty;
     console.log("Final score data:", newScoreData);
 
     await answer.update({
