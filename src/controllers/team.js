@@ -1,11 +1,11 @@
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
-const { Team } = require("../models");
+const { Team, Match } = require("../models");
 const { comparePassword, encryptPassword } = require("../lib/encrypt");
 const useController = require("../lib/useController");
+const { getFilter } = require("../lib/common");
 const { getAll, get, update, create, remove } = useController(Team);
 
-const include = [];
 const filterField = {
   match_id: {
     field: "id",
@@ -31,13 +31,50 @@ const filterField = {
 const ignore = ["password"];
 
 const getTeams = async (req, res) => {
-  if (!req.auth.is_admin) req.query.eq_id = req.auth.id;
-  await getAll(req, res, ignore, include, filterField);
+  try {
+    if (!req.auth.is_admin) req.query.eq_id = req.auth.id;
+
+    const filter = getFilter(req.query, filterField);
+    const { round_id } = req.query;
+
+    // Build include with optional round_id filter
+    const matchInclude = {
+      model: Match,
+      as: "Matches",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+    };
+
+    if (round_id) {
+      matchInclude.where = { round_id };
+      matchInclude.required = true; // Only return teams that have matches in this round
+    }
+
+    const data = await Team.findAndCountAll({
+      where: filter,
+      attributes: { exclude: ignore },
+      include: [matchInclude],
+      distinct: true, // Fix count when using include with many-to-many
+    });
+
+    return res.status(200).json({ count: data.count, data: data.rows });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
+
 const getTeam = async (req, res) => {
   if (req.params.id != req.auth.id) {
     return res.status(405).json({ message: "Not allowed" });
   }
+  const include = [
+    {
+      model: Match,
+      as: "Matches",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+    },
+  ];
   await get(req, res, ignore, include);
 };
 
