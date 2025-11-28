@@ -205,9 +205,79 @@ const createAnswer = async (req, res) => {
   }
 };
 
+const recalculateScores = async (req, res) => {
+  console.log(req.body);
+  try {
+    const { round_id: roundId } = req.body;
+
+    if (!roundId) {
+      return res.status(400).json({ message: "round_id is required" });
+    }
+
+    // Get all answers for the given round
+    const answers = await Answer.findAll({
+      include: [
+        {
+          model: Question,
+          as: "question",
+        },
+        {
+          model: Match,
+          as: "match",
+          where: { round_id: roundId },
+        },
+      ],
+    });
+
+    if (!answers.length) {
+      return res.status(200).json({
+        message: "No answers found for this round",
+        count: 0
+      });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const answer of answers) {
+      try {
+        const questionData = JSON.parse(answer.question.question_data);
+        const answerData = JSON.parse(answer.answer_data);
+        const currentScoreData = JSON.parse(answer.score_data || "{}");
+
+        // Add to job queue for recalculation
+        addAnswer({
+          scoreData: {
+            ...currentScoreData,
+            status: "pending",
+          },
+          answerData,
+          questionData,
+          answerId: answer.id,
+        });
+
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to queue answer ${answer.id}:`, err.message);
+        failCount++;
+      }
+    }
+
+    return res.status(200).json({
+      message: `Recalculation queued for ${successCount} answers`,
+      success: successCount,
+      failed: failCount,
+      total: answers.length,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAnswers,
   getAnswer,
   createAnswer,
   removeAnswer,
+  recalculateScores,
 };
