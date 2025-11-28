@@ -33,6 +33,10 @@ const include = [
 const ignore = ["answer_data"];
 
 const filterField = {
+  eq_question_id: {
+    field: "question_id",
+    op: "eq",
+  },
   match_id: {
     field: "id",
     op: "like",
