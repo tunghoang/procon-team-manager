@@ -1,5 +1,6 @@
 const got = require("got");
 const crypto = require("crypto");
+const XLSX = require("xlsx");
 const useController = require("../lib/useController");
 const { Answer, Question, Team, Match, Round } = require("../models");
 const { getAll, create, remove } = useController(Answer);
@@ -278,10 +279,201 @@ const recalculateScores = async (req, res) => {
   }
 };
 
+const exportAnswersToXlsx = async (req, res) => {
+  try {
+    const { round_id: roundId } = req.query;
+
+    if (!roundId) {
+      return res.status(400).json({ message: "round_id is required" });
+    }
+
+    // Get all answers for the given round with includes
+    const answers = await Answer.findAll({
+      include: [
+        {
+          model: Question,
+          as: "question",
+          attributes: ["id", "name", "match_id"],
+        },
+        {
+          model: Team,
+          as: "team",
+          attributes: ["id", "name"],
+        },
+        {
+          model: Match,
+          as: "match",
+          include: [
+            {
+              model: Round,
+              as: "round",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+      ],
+      where: {
+        "$match.round_id$": roundId,
+      },
+    });
+
+    if (!answers.length) {
+      return res.status(404).json({
+        message: "No answers found for this round",
+      });
+    }
+
+    // Group data by match then by team
+    const groupedData = {};
+
+    answers.forEach((answer) => {
+      const matchName = answer.match?.name || "Unknown Match";
+      const teamName = answer.team?.name || "Unknown Team";
+      const questionName = answer.question?.name || "Unknown Question";
+      const scoreData = JSON.parse(answer.score_data || "{}");
+
+      if (!groupedData[matchName]) {
+        groupedData[matchName] = {};
+      }
+
+      if (!groupedData[matchName][teamName]) {
+        groupedData[matchName][teamName] = {
+          team: teamName,
+          questions: {},
+        };
+      }
+
+      groupedData[matchName][teamName].questions[questionName] = {
+        match_score: scoreData.match_count ?? "NA",
+        step: scoreData.step_count ?? "NA",
+        resub: scoreData.resubmission_count ?? "NA",
+      };
+    });
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+
+    // Process each match
+    Object.keys(groupedData).forEach((matchName) => {
+      const teams = groupedData[matchName];
+      const teamNames = Object.keys(teams);
+
+      // Get all unique question names
+      const questionNames = new Set();
+      Object.values(teams).forEach((team) => {
+        Object.keys(team.questions).forEach((q) => questionNames.add(q));
+      });
+      const sortedQuestions = Array.from(questionNames).sort();
+
+      // Build sheet data
+      const sheetData = [];
+
+      // Header row 1: Main headers
+      const header1 = ["STT", "Team"];
+      sortedQuestions.forEach((q) => {
+        header1.push(q, "", ""); // Each question takes 3 columns
+      });
+      header1.push("Sum", "", "");
+      sheetData.push(header1);
+
+      // Header row 2: Sub headers
+      const header2 = ["", ""];
+      sortedQuestions.forEach(() => {
+        header2.push("Match score", "Step", "Resub");
+      });
+      header2.push("Match score", "Step", "Resub");
+      sheetData.push(header2);
+
+      // Data rows
+      teamNames.forEach((teamName, idx) => {
+        const team = teams[teamName];
+        const row = [idx + 1, teamName];
+
+        let totalMatchScore = 0;
+        let totalStep = 0;
+        let totalResub = 0;
+
+        sortedQuestions.forEach((questionName) => {
+          const questionData = team.questions[questionName] || {
+            match_score: "",
+            step: "",
+            resub: "",
+          };
+
+          row.push(
+            questionData.match_score,
+            questionData.step,
+            questionData.resub
+          );
+
+          if (typeof questionData.match_score === "number") {
+            totalMatchScore += questionData.match_score;
+          }
+          if (typeof questionData.step === "number") {
+            totalStep += questionData.step;
+          }
+          if (typeof questionData.resub === "number") {
+            totalResub += questionData.resub;
+          }
+        });
+
+        // Add sum columns
+        row.push(totalMatchScore, totalStep, totalResub);
+        sheetData.push(row);
+      });
+
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+      // Merge cells for main headers
+      const merges = [];
+      let colIdx = 2; // Start after STT and Team
+      sortedQuestions.forEach((q) => {
+        merges.push({
+          s: { r: 0, c: colIdx },
+          e: { r: 0, c: colIdx + 2 },
+        });
+        colIdx += 3;
+      });
+      // Merge Sum header
+      merges.push({
+        s: { r: 0, c: colIdx },
+        e: { r: 0, c: colIdx + 2 },
+      });
+      // Merge STT and Team headers
+      merges.push({ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } });
+      merges.push({ s: { r: 0, c: 1 }, e: { r: 1, c: 1 } });
+
+      ws["!merges"] = merges;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, matchName.substring(0, 31)); // Excel sheet name limit
+    });
+
+    // Generate buffer
+    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+
+    // Send file
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=answers_round_${roundId}.xlsx`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.send(excelBuffer);
+  } catch (error) {
+    console.error("Export error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAnswers,
   getAnswer,
   createAnswer,
   removeAnswer,
   recalculateScores,
+  exportAnswersToXlsx,
 };
