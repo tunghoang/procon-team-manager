@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require("sequelize");
 const sequelize = require("./dbInstance");
 
-class Match extends Model {}
+class Match extends Model { }
 
 Match.init(
   {
@@ -19,9 +19,11 @@ Match.init(
     },
     start_time: {
       type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
     },
     end_time: {
       type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
     },
     is_active: {
       type: DataTypes.BOOLEAN,
