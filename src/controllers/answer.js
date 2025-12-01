@@ -47,6 +47,10 @@ const filterField = {
       field: "$match.id$",
       op: "eq",
     },
+    like_match_name: {
+      field: "$match.name$",
+      op: "like",
+    },
     match_name: {
       field: "$match.name$",
       op: "like",
@@ -61,6 +65,10 @@ const filterField = {
     },
   },
   question: {
+    like_question_name: {
+      field: "$question.name$",
+      op: "like",
+    },
     match_name: {
       field: "$question.name$",
       op: "like",
@@ -70,6 +78,10 @@ const filterField = {
     eq_id: {
       field: "$team.id$",
       op: "eq",
+    },
+    like_team_name: {
+      field: "$team.name$",
+      op: "like",
     },
     match_name: {
       field: "$team.name$",
@@ -84,7 +96,108 @@ const getAnswers = async (req, res) => {
       ...req.query.team,
       eq_id: req.auth.id,
     };
-  await getAll(req, res, ignore, include, filterField);
+
+  // Extract pagination params
+  const page = parseInt(req.query.page) || 0; // 0-indexed page
+  const limit = parseInt(req.query.limit) || 50; // default 50 items per page
+  const offset = page * limit;
+
+  // Extract score-related filters from query params
+  const scoreFilters = {
+    match_score: req.query.match_score,
+    max_match_score: req.query.max_match_score,
+    step: req.query.step,
+    resub_count: req.query.resub_count,
+  };
+
+  // Remove pagination and score filters from query to avoid conflicts
+  delete req.query.page;
+  delete req.query.limit;
+  delete req.query.match_score;
+  delete req.query.max_match_score;
+  delete req.query.step;
+  delete req.query.resub_count;
+
+  try {
+    const filter = require("../lib/common").getFilter(req.query, filterField);
+
+    // Fetch data with basic filters
+    const data = await Answer.findAndCountAll({
+      where: filter,
+      attributes: { exclude: ignore },
+      include,
+    });
+
+    // Parse answer_data and filter by score_data fields (client-side filtering)
+    let filteredRows = data.rows;
+
+    for (let row of filteredRows) {
+      if (row.answer_data != null && row.answer_data.length > 0) {
+        row.answer_data = JSON.parse(row.answer_data);
+      }
+    }
+
+    // Apply score-based filters if provided
+    if (Object.values(scoreFilters).some(v => v !== undefined)) {
+      filteredRows = filteredRows.filter(row => {
+        try {
+          const scoreData = JSON.parse(row.score_data || "{}");
+
+          // Check match_score filter
+          if (scoreFilters.match_score) {
+            const matchScore = scoreData.match_count?.toString() || "";
+            if (!matchScore.includes(scoreFilters.match_score)) {
+              return false;
+            }
+          }
+
+          // Check max_match_score filter
+          if (scoreFilters.max_match_score) {
+            const maxMatchScore = scoreData.max_match_count?.toString() || "";
+            if (!maxMatchScore.includes(scoreFilters.max_match_score)) {
+              return false;
+            }
+          }
+
+          // Check step filter
+          if (scoreFilters.step) {
+            const step = scoreData.step_count?.toString() || "";
+            if (!step.includes(scoreFilters.step)) {
+              return false;
+            }
+          }
+
+          // Check resub_count filter
+          if (scoreFilters.resub_count) {
+            const resubCount = scoreData.resubmission_count?.toString() || "";
+            if (!resubCount.includes(scoreFilters.resub_count)) {
+              return false;
+            }
+          }
+
+          return true;
+        } catch (e) {
+          return false;
+        }
+      });
+    }
+
+    // Get total count after filtering
+    const totalCount = filteredRows.length;
+
+    // Apply pagination
+    const paginatedRows = filteredRows.slice(offset, offset + limit);
+
+    return res.status(200).json({
+      count: totalCount, // Total count of filtered results
+      data: paginatedRows, // Paginated data
+      page: page, // Current page
+      limit: limit, // Items per page
+      totalPages: Math.ceil(totalCount / limit), // Total pages
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const getAnswer = async (req, res) => {
