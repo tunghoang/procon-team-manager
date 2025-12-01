@@ -63,6 +63,16 @@ const filterField = {
       field: "$match.round_id$",
       op: "eq",
     },
+    // Filter by question name via match[like_question_name]
+    like_question_name: {
+      field: "$question.name$",
+      op: "like",
+    },
+    // Filter by team name via match[like_team_name]
+    like_team_name: {
+      field: "$team.name$",
+      op: "like",
+    },
   },
   question: {
     like_question_name: {
