@@ -5,6 +5,7 @@ const {
   getQuestion,
   updateQuestion,
   removeQuestion,
+  regenerateQuestion,
   getTime,
 } = require("../controllers/question");
 const { requireAdmin } = require("../middleware/authenticate");
@@ -18,6 +19,7 @@ router.route("/:id").get(getQuestion);
 router.all("*", requireAdmin);
 
 router.route("/").post(createQuestion);
+router.route("/:id/regenerate").put(regenerateQuestion);
 router.route("/:id").put(updateQuestion).delete(removeQuestion);
 
 module.exports = router;

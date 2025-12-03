@@ -27,6 +27,21 @@ Question.init(
     question_data: {
       type: DataTypes.TEXT('long'),
     },
+    mode: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Generation mode for auto-generated questions',
+    },
+    max_ops: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Maximum operations for auto-generated questions',
+    },
+    rotations: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Number of rotations for auto-generated questions',
+    },
     order: {
       type: DataTypes.INTEGER,
       defaultValue: 0,

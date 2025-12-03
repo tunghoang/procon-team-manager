@@ -1,6 +1,6 @@
 const got = require("got");
 const useController = require("../lib/useController");
-const { Match, Question } = require("../models");
+const { Match, Question, Answer } = require("../models");
 const { update, create, remove } = useController(Question);
 const { getFilter, getServiceApi } = require("../lib/common");
 const { sequelize } = require("../models");
@@ -162,18 +162,33 @@ const createQuestion = async (req, res) => {
         entities: req.body.raw_questions,
       }
       req.body.question_data = JSON.stringify({ field });
+      // Manual questions don't have mode, max_ops, rotations
+      req.body.mode = null;
+      req.body.max_ops = null;
+      req.body.rotations = null;
     } else {
+      // Auto-generated question
+      const mode = req.body.mode || 0;
+      const max_ops = req.body.max_ops || 2;
+      const rotations = req.body.rotations || 3;
+      const size = req.body.size || 12;
+
       const response = await got
         .get(`${getServiceApi()}/board`, {
           searchParams: {
-            size: req.body.size || 12,
-            mode: req.body.mode || 0,
-            max_ops: req.body.max_ops || 2,
-            rotations: req.body.rotations || 3,
+            size,
+            mode,
+            max_ops,
+            rotations,
           },
         })
         .json();
       req.body.question_data = JSON.stringify(response);
+
+      // Save parameters to DB fields
+      req.body.mode = mode;
+      req.body.max_ops = max_ops;
+      req.body.rotations = rotations;
     }
     await create(req, res);
   } catch (error) {
@@ -188,11 +203,76 @@ const getTime = (req, res) => {
   });
 };
 
+const regenerateQuestion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const question = await Question.findByPk(id);
+
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    if (
+      question.mode === null ||
+      question.max_ops === null ||
+      question.rotations === null
+    ) {
+      return res.status(400).json({
+        message: "This question was created manually and cannot be regenerated. Please create a new question instead."
+      });
+    }
+
+    // Get parameters from DB fields (data gốc)
+    const mode = question.mode;
+    const max_ops = question.max_ops;
+    const rotations = question.rotations;
+
+    // Get size from question_data
+    const currentData = JSON.parse(question.question_data || "{}");
+    const size = currentData.parameters?.size || currentData.field?.size || 12;
+
+    // Call service API to generate new question_data
+    const response = await got
+      .get(`${getServiceApi()}/board`, {
+        searchParams: {
+          size,
+          mode,
+          max_ops,
+          rotations,
+        },
+      })
+      .json();
+
+    // Delete all existing answers for this question
+    // Because the new board is completely different, old answers are invalid
+    const deletedCount = await Answer.destroy({
+      where: {
+        question_id: id,
+      },
+    });
+
+    // Update question with new question_data
+    await question.update({
+      question_data: JSON.stringify(response),
+    });
+
+    return res.status(200).json({
+      message: "Question regenerated successfully",
+      question,
+      deletedAnswers: deletedCount,
+    });
+  } catch (error) {
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
+  }
+};
+
 module.exports = {
   getQuestions,
   getQuestion,
   createQuestion,
   updateQuestion,
   removeQuestion,
+  regenerateQuestion,
   getTime,
 };
