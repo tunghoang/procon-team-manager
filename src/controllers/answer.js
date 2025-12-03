@@ -592,6 +592,147 @@ const exportAnswersToXlsx = async (req, res) => {
   }
 };
 
+const getScoreSummary = async (req, res) => {
+  try {
+    const { round_id: roundId } = req.query;
+
+    if (!roundId) {
+      return res.status(400).json({ message: "round_id is required" });
+    }
+
+    // Get all answers for the given round with includes
+    const answers = await Answer.findAll({
+      include: [
+        {
+          model: Question,
+          as: "question",
+          attributes: ["id", "name", "match_id"],
+        },
+        {
+          model: Team,
+          as: "team",
+          attributes: ["id", "name"],
+        },
+        {
+          model: Match,
+          as: "match",
+          include: [
+            {
+              model: Round,
+              as: "round",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+      ],
+      where: {
+        "$match.round_id$": roundId,
+      },
+    });
+
+    if (!answers.length) {
+      return res.status(404).json({
+        message: "No answers found for this round",
+      });
+    }
+
+    // Group data by match then by team
+    const groupedData = {};
+
+    answers.forEach((answer) => {
+      const matchName = answer.match?.name || "Unknown Match";
+      const teamName = answer.team?.name || "Unknown Team";
+      const questionName = answer.question?.name || "Unknown Question";
+      const scoreData = JSON.parse(answer.score_data || "{}");
+
+      if (!groupedData[matchName]) {
+        groupedData[matchName] = {};
+      }
+
+      if (!groupedData[matchName][teamName]) {
+        groupedData[matchName][teamName] = {
+          team: teamName,
+          questions: {},
+        };
+      }
+
+      groupedData[matchName][teamName].questions[questionName] = {
+        match_score: scoreData.match_count ?? 0,
+        step: scoreData.step_count ?? 0,
+        resub: scoreData.resubmission_count ?? 0,
+      };
+    });
+
+    // Process each match
+    const result = Object.keys(groupedData).map((matchName) => {
+      const teams = groupedData[matchName];
+      const teamNames = Object.keys(teams);
+
+      // Get all unique question names and sort them
+      const questionNames = new Set();
+      Object.values(teams).forEach((team) => {
+        Object.keys(team.questions).forEach((q) => questionNames.add(q));
+      });
+      const sortedQuestions = Array.from(questionNames).sort();
+
+      // Build data rows
+      const rows = teamNames.map((teamName, idx) => {
+        const team = teams[teamName];
+        const questions = {};
+
+        let totalMatchScore = 0;
+        let totalStep = 0;
+        let totalResub = 0;
+
+        sortedQuestions.forEach((questionName) => {
+          const questionData = team.questions[questionName] || {
+            match_score: 0,
+            step: 0,
+            resub: 0,
+          };
+
+          questions[questionName] = questionData;
+
+          if (typeof questionData.match_score === "number") {
+            totalMatchScore += questionData.match_score;
+          }
+          if (typeof questionData.step === "number") {
+            totalStep += questionData.step;
+          }
+          if (typeof questionData.resub === "number") {
+            totalResub += questionData.resub;
+          }
+        });
+
+        return {
+          stt: idx + 1,
+          team: teamName,
+          questions,
+          sum: {
+            match_score: totalMatchScore,
+            step: totalStep,
+            resub: totalResub,
+          },
+        };
+      });
+
+      return {
+        match: matchName,
+        questions: sortedQuestions,
+        data: rows,
+      };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error generating score summary:", error);
+    res.status(500).json({
+      message: "Failed to generate score summary",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getAnswers,
   getAnswer,
@@ -599,4 +740,5 @@ module.exports = {
   removeAnswer,
   recalculateScores,
   exportAnswersToXlsx,
+  getScoreSummary,
 };
