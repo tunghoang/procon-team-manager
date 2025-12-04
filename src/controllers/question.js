@@ -309,6 +309,36 @@ const regenerateQuestion = async (req, res) => {
   }
 };
 
+const getOptimalAnswers = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const question = await Question.findByPk(id, {
+      include: [
+        {
+          model: OptimalAnswer,
+          as: "optimal_answers",
+        },
+      ],
+    });
+
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    const optimalAnswers = question.optimal_answers || [];
+    const moves = optimalAnswers.length > 0
+      ? JSON.parse(optimalAnswers[0].moves || "[]")
+      : [];
+
+    return res.status(200).json({
+      question_id: id,
+      moves,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getQuestions,
   getQuestion,
@@ -316,5 +346,6 @@ module.exports = {
   updateQuestion,
   removeQuestion,
   regenerateQuestion,
+  getOptimalAnswers,
   getTime,
 };

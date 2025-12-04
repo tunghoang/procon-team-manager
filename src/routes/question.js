@@ -6,6 +6,7 @@ const {
   updateQuestion,
   removeQuestion,
   regenerateQuestion,
+  getOptimalAnswers,
   getTime,
 } = require("../controllers/question");
 const { requireAdmin } = require("../middleware/authenticate");
@@ -20,6 +21,7 @@ router.all("*", requireAdmin);
 
 router.route("/").post(createQuestion);
 router.route("/:id/regenerate").put(regenerateQuestion);
+router.route("/:id/optimal-answers").get(getOptimalAnswers);
 router.route("/:id").put(updateQuestion).delete(removeQuestion);
 
 module.exports = router;
