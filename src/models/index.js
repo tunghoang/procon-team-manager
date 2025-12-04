@@ -5,6 +5,7 @@ const Match = require("./match");
 const Question = require("./question");
 const Answer = require("./answer");
 const Round = require("./round");
+const OptimalAnswer = require("./optimal_answer");
 
 Tournament.hasMany(Round, {
   as: "rounds",
@@ -116,6 +117,24 @@ Answer.belongsTo(Question, {
   onDelete: "cascade",
 });
 
+Question.hasMany(OptimalAnswer, {
+  as: "optimal_answers",
+  foreignKey: {
+    name: "question_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
+OptimalAnswer.belongsTo(Question, {
+  as: "question",
+  foreignKey: {
+    name: "question_id",
+    allowNull: false,
+  },
+  onDelete: "cascade",
+});
+
 sequelize.sync();
 
 module.exports = {
@@ -126,4 +145,5 @@ module.exports = {
   Match,
   Question,
   Answer,
+  OptimalAnswer,
 };

@@ -502,9 +502,9 @@ const exportAnswersToXlsx = async (req, res) => {
       // Header row 2: Sub headers
       const header2 = ["", ""];
       sortedQuestions.forEach(() => {
-        header2.push("Match score", "Step", "Resub");
+        header2.push("Pair score", "Step", "Resub");
       });
-      header2.push("Match score", "Step", "Resub");
+      header2.push("Pair score", "Step", "Resub");
       sheetData.push(header2);
 
       // Data rows

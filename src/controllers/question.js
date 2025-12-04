@@ -1,6 +1,6 @@
 const got = require("got");
 const useController = require("../lib/useController");
-const { Match, Question, Answer } = require("../models");
+const { Match, Question, Answer, OptimalAnswer } = require("../models");
 const { update, create, remove } = useController(Question);
 const { getFilter, getServiceApi } = require("../lib/common");
 const { sequelize } = require("../models");
@@ -145,10 +145,20 @@ const createQuestion = async (req, res) => {
       return res.status(406).json({ message: "match_id invalid" });
     }
 
-    const question = await Question.findOne({
+    const existingQuestion = await Question.findOne({
       where: { name: req.body.name, match_id: req.body.match_id },
     });
-    if (question) return res.status(400).json({ message: "Duplicated name" });
+    if (existingQuestion) return res.status(400).json({ message: "Duplicated name" });
+
+    // Auto-increment order based on existing questions in the same match
+    const maxOrderQuestion = await Question.findOne({
+      where: { match_id: req.body.match_id },
+      order: [["order", "DESC"]],
+      attributes: ["order"],
+    });
+    req.body.order = (maxOrderQuestion?.order ?? -1) + 1;
+
+    let optimalAnswers = [];
 
     if (req.body.type === "manual") {
       const size = req.body.raw_questions.length;
@@ -183,14 +193,29 @@ const createQuestion = async (req, res) => {
           },
         })
         .json();
-      req.body.question_data = JSON.stringify(response);
+      req.body.question_data = JSON.stringify(response.question_data);
 
       // Save parameters to DB fields
       req.body.mode = mode;
       req.body.max_ops = max_ops;
       req.body.rotations = rotations;
+
+      // Get optimal answers from response
+      optimalAnswers = response.parameters?.answers || [];
     }
-    await create(req, res);
+
+    // Create the question
+    const question = await Question.create(req.body);
+
+    // Save optimal answers if available
+    if (optimalAnswers.length > 0) {
+      await OptimalAnswer.create({
+        question_id: question.id,
+        moves: JSON.stringify(optimalAnswers),
+      });
+    }
+
+    return res.status(201).json(question);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
     return res.status(500).json({ message: errMsg });
@@ -242,10 +267,18 @@ const regenerateQuestion = async (req, res) => {
         },
       })
       .json();
+    const optimalAnswers = response.parameters?.answers || [];
 
     // Delete all existing answers for this question
     // Because the new board is completely different, old answers are invalid
-    const deletedCount = await Answer.destroy({
+    const deletedAnswersCount = await Answer.destroy({
+      where: {
+        question_id: id,
+      },
+    });
+
+    // Delete all existing optimal_answers for this question
+    const deletedOptimalCount = await OptimalAnswer.destroy({
       where: {
         question_id: id,
       },
@@ -253,13 +286,22 @@ const regenerateQuestion = async (req, res) => {
 
     // Update question with new question_data
     await question.update({
-      question_data: JSON.stringify(response),
+      question_data: JSON.stringify(response.question_data),
     });
+
+    // Save new optimal answers
+    if (optimalAnswers.length > 0) {
+      await OptimalAnswer.create({
+        question_id: id,
+        moves: JSON.stringify(optimalAnswers),
+      });
+    }
 
     return res.status(200).json({
       message: "Question regenerated successfully",
       question,
-      deletedAnswers: deletedCount,
+      deletedAnswers: deletedAnswersCount,
+      deletedOptimalAnswers: deletedOptimalCount,
     });
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
