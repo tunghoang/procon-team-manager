@@ -6,6 +6,7 @@ const {
   updateQuestion,
   removeQuestion,
   regenerateQuestion,
+  regenerateWithParams,
   getOptimalAnswers,
   getTime,
 } = require("../controllers/question");
@@ -21,6 +22,7 @@ router.all("*", requireAdmin);
 
 router.route("/").post(createQuestion);
 router.route("/:id/regenerate").put(regenerateQuestion);
+router.route("/:id/regenerate-with-params").put(regenerateWithParams);
 router.route("/:id/optimal-answers").get(getOptimalAnswers);
 router.route("/:id").put(updateQuestion).delete(removeQuestion);
 

@@ -309,6 +309,83 @@ const regenerateQuestion = async (req, res) => {
   }
 };
 
+const regenerateWithParams = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { size, mode, max_ops, rotations, name, description } = req.body;
+    const question = await Question.findByPk(id);
+
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    // Validate parameters
+    if (size < 4 || size > 24 || size % 2 !== 0) {
+      return res.status(400).json({ message: "Invalid size. Must be even number between 4 and 24." });
+    }
+
+    if (mode !== 0 && mode !== 1) {
+      return res.status(400).json({ message: "Invalid mode. Must be 0 (random) or 1 (special)." });
+    }
+
+    // Call service API to generate new question_data
+    const response = await got
+      .get(`${getServiceApi()}/board`, {
+        searchParams: {
+          size,
+          mode,
+          max_ops,
+          rotations,
+        },
+      })
+      .json();
+    const optimalAnswers = response.parameters?.answers || [];
+
+    // Delete all existing answers for this question
+    const deletedAnswersCount = await Answer.destroy({
+      where: {
+        question_id: id,
+      },
+    });
+
+    // Delete all existing optimal_answers for this question
+    const deletedOptimalCount = await OptimalAnswer.destroy({
+      where: {
+        question_id: id,
+      },
+    });
+
+    // Update question with new parameters and question_data
+    await question.update({
+      name: name || question.name,
+      description: description !== undefined ? description : question.description,
+      size,
+      mode,
+      max_ops,
+      rotations,
+      question_data: JSON.stringify(response.question_data),
+    });
+
+    // Save new optimal answers
+    if (optimalAnswers.length > 0) {
+      await OptimalAnswer.create({
+        question_id: id,
+        moves: JSON.stringify(optimalAnswers),
+      });
+    }
+
+    return res.status(200).json({
+      message: "Question updated and regenerated successfully",
+      question,
+      deletedAnswers: deletedAnswersCount,
+      deletedOptimalAnswers: deletedOptimalCount,
+    });
+  } catch (error) {
+    let errMsg = error.response ? error.response.body : error.message;
+    return res.status(500).json({ message: errMsg });
+  }
+};
+
 const getOptimalAnswers = async (req, res) => {
   try {
     const { id } = req.params;
@@ -346,6 +423,7 @@ module.exports = {
   updateQuestion,
   removeQuestion,
   regenerateQuestion,
+  regenerateWithParams,
   getOptimalAnswers,
   getTime,
 };
