@@ -149,6 +149,93 @@ const createTeamMatch = async (req, res) => {
   }
 };
 
+// Bulk add teams to matches
+// Body: { match_ids: number[], team_ids: number[] }
+const bulkAddTeams = async (req, res) => {
+  const { match_ids, team_ids } = req.body;
+  try {
+    if (!match_ids?.length || !team_ids?.length) {
+      return res.status(400).json({
+        message: "match_ids and team_ids are required",
+      });
+    }
+
+    const matches = await Match.findAll({
+      where: { id: match_ids },
+      include: [{ model: Team, as: "teams", attributes: ["id"] }],
+    });
+
+    const teams = await Team.findAll({
+      where: { id: team_ids },
+    });
+
+    if (!matches.length) {
+      return res.status(404).json({ message: "No matches found" });
+    }
+    if (!teams.length) {
+      return res.status(404).json({ message: "No teams found" });
+    }
+
+    let addedCount = 0;
+    for (const match of matches) {
+      const existingTeamIds = match.teams.map((t) => t.id);
+      const teamsToAdd = teams.filter((t) => !existingTeamIds.includes(t.id));
+      if (teamsToAdd.length > 0) {
+        await match.addTeams(teamsToAdd);
+        addedCount += teamsToAdd.length;
+      }
+    }
+
+    return res.status(200).json({
+      message: `Successfully added ${addedCount} team-match relationships`,
+      added_count: addedCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Bulk remove teams from matches
+// Body: { match_ids: number[], team_ids: number[] }
+const bulkRemoveTeams = async (req, res) => {
+  const { match_ids, team_ids } = req.body;
+  try {
+    if (!match_ids?.length || !team_ids?.length) {
+      return res.status(400).json({
+        message: "match_ids and team_ids are required",
+      });
+    }
+
+    const matches = await Match.findAll({
+      where: { id: match_ids },
+    });
+
+    const teams = await Team.findAll({
+      where: { id: team_ids },
+    });
+
+    if (!matches.length) {
+      return res.status(404).json({ message: "No matches found" });
+    }
+    if (!teams.length) {
+      return res.status(404).json({ message: "No teams found" });
+    }
+
+    let removedCount = 0;
+    for (const match of matches) {
+      await match.removeTeams(teams);
+      removedCount += teams.length;
+    }
+
+    return res.status(200).json({
+      message: `Successfully removed ${removedCount} team-match relationships`,
+      removed_count: removedCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getMatches,
   getMatch,
@@ -157,4 +244,6 @@ module.exports = {
   removeMatch,
   removeTeamMatch,
   createTeamMatch,
+  bulkAddTeams,
+  bulkRemoveTeams,
 };
