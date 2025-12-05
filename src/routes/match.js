@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const {
   getMatches,
+  getMatchByName,
   createMatch,
   getMatch,
   updateMatch,
@@ -16,6 +17,7 @@ const router = Router();
 
 router.route("/").get(getMatches);
 router.route("/:id").get(getMatch);
+router.route("/name/:name").get(getMatchByName);
 
 router.all("*", requireAdmin);
 

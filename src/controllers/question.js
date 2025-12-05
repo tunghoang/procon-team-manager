@@ -139,6 +139,41 @@ const removeQuestion = async (req, res) => {
   await remove(req, res);
 };
 
+// Bulk delete questions
+// Body: { question_ids: number[] }
+const bulkDeleteQuestions = async (req, res) => {
+  const { question_ids } = req.body;
+  try {
+    if (!question_ids?.length) {
+      return res.status(400).json({
+        message: "question_ids is required",
+      });
+    }
+
+    // Delete all answers for these questions first
+    await Answer.destroy({
+      where: { question_id: question_ids },
+    });
+
+    // Delete all optimal_answers for these questions
+    await OptimalAnswer.destroy({
+      where: { question_id: question_ids },
+    });
+
+    // Delete the questions
+    const deletedCount = await Question.destroy({
+      where: { id: question_ids },
+    });
+
+    return res.status(200).json({
+      message: `Successfully deleted ${deletedCount} question(s)`,
+      deleted_count: deletedCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 const createQuestion = async (req, res) => {
   try {
     if (!req.body.match_id) {
@@ -422,6 +457,7 @@ module.exports = {
   createQuestion,
   updateQuestion,
   removeQuestion,
+  bulkDeleteQuestions,
   regenerateQuestion,
   regenerateWithParams,
   getOptimalAnswers,

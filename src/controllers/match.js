@@ -56,6 +56,20 @@ const getMatches = async (req, res) => {
   await getAll(req, res, null, include, filterField);
 };
 
+const getMatchByName = async (req, res) => {
+  try {
+    const match = await Match.findOne({ where: { name: req.params.name } });
+    if (!match) {
+      return res.status(404).json({
+        message: `Match not found`,
+      });
+    }
+    return res.status(200).json(match);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+}
+
 const getMatch = async (req, res) => {
   try {
     const match = await Match.findByPk(req.params.id, {
@@ -239,6 +253,7 @@ const bulkRemoveTeams = async (req, res) => {
 module.exports = {
   getMatches,
   getMatch,
+  getMatchByName,
   createMatch,
   updateMatch,
   removeMatch,

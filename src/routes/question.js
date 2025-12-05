@@ -5,6 +5,7 @@ const {
   getQuestion,
   updateQuestion,
   removeQuestion,
+  bulkDeleteQuestions,
   regenerateQuestion,
   regenerateWithParams,
   getOptimalAnswers,
@@ -21,6 +22,7 @@ router.route("/:id").get(getQuestion);
 router.all("*", requireAdmin);
 
 router.route("/").post(createQuestion);
+router.route("/bulk-delete").post(bulkDeleteQuestions);
 router.route("/:id/regenerate").put(regenerateQuestion);
 router.route("/:id/regenerate-with-params").put(regenerateWithParams);
 router.route("/:id/optimal-answers").get(getOptimalAnswers);
