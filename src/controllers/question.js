@@ -128,6 +128,22 @@ const updateQuestion = async (req, res) => {
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
     }
+    if (req.body.type === "manual" && req.body.raw_questions) {
+      const size = req.body.raw_questions.length;
+      if (size < 4 || size > 24 || size % 2 !== 0) {
+        return res.status(406).json({ message: "Invalid size of board" });
+      }
+      const field = {
+        size: req.body.raw_questions.length,
+        entities: req.body.raw_questions,
+      };
+      req.body.question_data = JSON.stringify({ field });
+      // Manual questions don't have mode, max_ops, rotations
+      req.body.mode = null;
+      req.body.max_ops = null;
+      req.body.rotations = null;
+    }
+
     await update(req, res);
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
