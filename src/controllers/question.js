@@ -142,6 +142,10 @@ const updateQuestion = async (req, res) => {
       req.body.mode = null;
       req.body.max_ops = null;
       req.body.rotations = null;
+
+      // Delete existing answers and optimal answers as board is changing
+      await Answer.destroy({ where: { question_id: id } });
+      await OptimalAnswer.destroy({ where: { question_id: id } });
     }
 
     await update(req, res);
