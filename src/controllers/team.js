@@ -47,7 +47,7 @@ const getTeams = async (req, res) => {
 
     if (round_id) {
       matchInclude.where = { round_id };
-      matchInclude.required = true; // Only return teams that have matches in this round
+      matchInclude.required = false; // Return all teams, but only include matches from this round
     }
 
     const data = await Team.findAndCountAll({
