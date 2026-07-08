@@ -32,6 +32,7 @@ if (process.env.NODE_ENV !== "staging") {
   app.get("/answers/*", serveIndexHtml);
   app.get("/rounds/*", serveIndexHtml);
   app.get("/competition/*", serveIndexHtml);
+  app.get("/admin/*", serveIndexHtml);
   app.get("/rounds", serveIndexHtml);
   app.get("/matches", serveIndexHtml);
   app.get("/teams", serveIndexHtml);
