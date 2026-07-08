@@ -1,13 +1,13 @@
 const { DataTypes, Model } = require("sequelize");
 const sequelize = require("./dbInstance");
 
-class Question extends Model { }
+class Question extends Model {}
 
 Question.init(
   {
     id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
     name: {
@@ -25,23 +25,23 @@ Question.init(
       type: DataTypes.DATE,
     },
     question_data: {
-      type: DataTypes.TEXT('long'),
+      type: DataTypes.TEXT("long"),
     },
-    mode: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      comment: 'Generation mode for auto-generated questions',
-    },
-    max_ops: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      comment: 'Maximum operations for auto-generated questions',
-    },
-    rotations: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      comment: 'Number of rotations for auto-generated questions',
-    },
+    // mode: {
+    //   type: DataTypes.INTEGER,
+    //   allowNull: true,
+    //   comment: "Generation mode for auto-generated questions",
+    // },
+    // max_ops: {
+    //   type: DataTypes.INTEGER,
+    //   allowNull: true,
+    //   comment: 'Maximum operations for auto-generated questions',
+    // },
+    // rotations: {
+    //   type: DataTypes.INTEGER,
+    //   allowNull: true,
+    //   comment: 'Number of rotations for auto-generated questions',
+    // },
     order: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
@@ -56,7 +56,7 @@ Question.init(
         fields: ["name", "match_id"],
       },
     },
-  }
+  },
 );
 
 module.exports = Question;

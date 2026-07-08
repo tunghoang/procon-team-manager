@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require("sequelize");
 const sequelize = require("./dbInstance");
 
-class Match extends Model { }
+class Match extends Model {}
 
 Match.init(
   {
@@ -40,7 +40,7 @@ Match.init(
     //      fields: ["name", "round_id"],
     //    },
     //  },
-  }
+  },
 );
 
 module.exports = Match;

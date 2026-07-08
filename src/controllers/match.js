@@ -2,7 +2,7 @@ const Match = require("../models/match");
 const useController = require("../lib/useController");
 const { Team, Tournament } = require("../models");
 const Round = require("../models/round");
-const { getAll, get, update, create, remove } = useController(Match);
+const { getAll, update, create, remove } = useController(Match);
 
 const include = [
   {
@@ -29,7 +29,7 @@ const filterField = {
   },
   match_is_active: {
     field: "is_active",
-    op: "like",
+    op: "eq",
   },
   eq_round_tournament_id: {
     field: "$round.tournament_id$",
@@ -48,17 +48,28 @@ const filterField = {
 };
 
 const getMatches = async (req, res) => {
-  if (!req.auth.is_admin)
-    req.query.teams = {
-      ...req.query.teams,
-      eq_id: req.auth.id,
+  if (!req.auth.is_admin) {
+    req.query = {
+      ...req.query,
+      teams: {
+        ...req.query.teams,
+        eq_id: req.auth.id,
+      },
+      match_is_active: true,
     };
+  }
   await getAll(req, res, null, include, filterField);
 };
 
 const getMatchByName = async (req, res) => {
   try {
-    const match = await Match.findOne({ where: { name: req.params.name } });
+    const where = {
+      name: req.params.name,
+    };
+    if (!req.auth.is_admin) {
+      where.is_active = true;
+    }
+    const match = await Match.findOne({ where });
     if (!match) {
       return res.status(404).json({
         message: `Match not found`,
@@ -68,11 +79,18 @@ const getMatchByName = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
-}
+};
 
 const getMatch = async (req, res) => {
   try {
-    const match = await Match.findByPk(req.params.id, {
+    const where = {
+      id: req.params.id,
+    };
+    if (!req.auth.is_admin) {
+      where.is_active = true;
+    }
+    const match = await Match.findOne({
+      where,
       include,
     });
     if (!match) {

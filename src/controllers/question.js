@@ -1,7 +1,7 @@
 const got = require("got");
 const useController = require("../lib/useController");
 const { Match, Question, Answer, OptimalAnswer } = require("../models");
-const { update, create, remove } = useController(Question);
+const { update } = useController(Question);
 const { getFilter, getServiceApi } = require("../lib/common");
 const { sequelize } = require("../models");
 const { QueryTypes } = require("sequelize");
@@ -61,8 +61,8 @@ const getQuestions = async (req, res) => {
       },
       include,
       order: [
-        ['order', 'ASC'],
-        ['createdAt', 'ASC'],
+        ["order", "ASC"],
+        ["createdAt", "ASC"],
       ],
     });
 
@@ -72,11 +72,11 @@ const getQuestions = async (req, res) => {
           questions.map(async (item) => {
             const team = await sequelize.query(
               `SELECT * FROM team_match where team_id = ${teamId} and match_id = ${item.match_id}`,
-              { type: QueryTypes.SELECT }
+              { type: QueryTypes.SELECT },
             );
             if (team.length) return item;
             return null;
-          })
+          }),
         )
       ).filter((item) => !!item);
     }
@@ -106,7 +106,7 @@ const getQuestion = async (req, res) => {
 
     const team = await sequelize.query(
       `SELECT * FROM team_match where team_id = ${teamId} and match_id = ${question.match_id}`,
-      { type: QueryTypes.SELECT }
+      { type: QueryTypes.SELECT },
     );
 
     if (!isAdmin && !team.length) {
@@ -156,13 +156,36 @@ const updateQuestion = async (req, res) => {
 };
 
 const removeQuestion = async (req, res) => {
-  await remove(req, res);
+  const transaction = await sequelize.transaction();
+  try {
+    const deletedCount = await Question.destroy({
+      where: { id: req.params.id },
+      transaction,
+    });
+    if (deletedCount === 0) {
+      await transaction.rollback();
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    await got.delete(`${getServiceApi()}/game/${question_id}`, {
+      headers: {
+        Authorization: req.get("Authorization"),
+      },
+    });
+    await transaction.commit();
+    return res.sendStatus(200);
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 // Bulk delete questions
 // Body: { question_ids: number[] }
 const bulkDeleteQuestions = async (req, res) => {
   const { question_ids } = req.body;
+  const transaction = await sequelize.transaction();
+
   try {
     if (!question_ids?.length) {
       return res.status(400).json({
@@ -170,31 +193,46 @@ const bulkDeleteQuestions = async (req, res) => {
       });
     }
 
-    // Delete all answers for these questions first
     await Answer.destroy({
       where: { question_id: question_ids },
+      transaction,
     });
 
-    // Delete all optimal_answers for these questions
     await OptimalAnswer.destroy({
       where: { question_id: question_ids },
+      transaction,
     });
 
-    // Delete the questions
     const deletedCount = await Question.destroy({
       where: { id: question_ids },
+      transaction,
     });
+
+    await Promise.all(
+      question_ids.map((question_id) =>
+        got.delete(`${getServiceApi()}/game/${question_id}`, {
+          headers: {
+            Authorization: `Bearer ${req.get("Authorization")}`,
+          },
+        }),
+      ),
+    );
+
+    await transaction.commit();
 
     return res.status(200).json({
       message: `Successfully deleted ${deletedCount} question(s)`,
       deleted_count: deletedCount,
     });
   } catch (error) {
+    await transaction.rollback();
     return res.status(500).json({ message: error.message });
   }
 };
 
 const createQuestion = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
   try {
     if (!req.body.match_id) {
       return res.status(406).json({ message: "match_id invalid" });
@@ -203,7 +241,8 @@ const createQuestion = async (req, res) => {
     const existingQuestion = await Question.findOne({
       where: { name: req.body.name, match_id: req.body.match_id },
     });
-    if (existingQuestion) return res.status(400).json({ message: "Duplicated name" });
+    if (existingQuestion)
+      return res.status(400).json({ message: "Duplicated name" });
 
     // Auto-increment order based on existing questions in the same match
     const maxOrderQuestion = await Question.findOne({
@@ -213,65 +252,89 @@ const createQuestion = async (req, res) => {
     });
     req.body.order = (maxOrderQuestion?.order ?? -1) + 1;
 
-    let optimalAnswers = [];
+    // let optimalAnswers = [];
 
-    if (req.body.type === "manual") {
-      const size = req.body.raw_questions.length;
-      if (size < 4 || size > 24 || size % 2 !== 0) {
-        return res
-          .status(406)
-          .json({ message: "Invalid size of board" });
-      }
-      const field = {
-        size: req.body.raw_questions.length,
-        entities: req.body.raw_questions,
-      }
-      req.body.question_data = JSON.stringify({ field });
-      // Manual questions don't have mode, max_ops, rotations
-      req.body.mode = null;
-      req.body.max_ops = null;
-      req.body.rotations = null;
-    } else {
-      // Auto-generated question
-      const mode = req.body.mode || 0;
-      const max_ops = req.body.max_ops || 2;
-      const rotations = req.body.rotations || 3;
-      const size = req.body.size || 12;
+    // if (req.body.type === "manual") {
+    //   const size = req.body.raw_questions.length;
+    //   if (size < 4 || size > 24 || size % 2 !== 0) {
+    //     return res
+    //       .status(406)
+    //       .json({ message: "Invalid size of board" });
+    //   }
+    //   const field = {
+    //     size: req.body.raw_questions.length,
+    //     entities: req.body.raw_questions,
+    //   }
+    //   req.body.question_data = JSON.stringify({ field });
+    //   // Manual questions don't have mode, max_ops, rotations
+    //   req.body.mode = null;
+    //   req.body.max_ops = null;
+    //   req.body.rotations = null;
+    // } else {
+    //   // Auto-generated question
+    //   const mode = req.body.mode || 0;
+    //   const max_ops = req.body.max_ops || 2;
+    //   const rotations = req.body.rotations || 3;
+    //   const size = req.body.size || 12;
 
-      const response = await got
-        .get(`${getServiceApi()}/board`, {
-          searchParams: {
-            size,
-            mode,
-            max_ops,
-            rotations,
-          },
-        })
-        .json();
-      req.body.question_data = JSON.stringify(response.question_data);
+    //   const response = await got
+    //     .get(`${getServiceApi()}/board`, {
+    //       searchParams: {
+    //         size,
+    //         mode,
+    //         max_ops,
+    //         rotations,
+    //       },
+    //     })
+    //     .json();
+    //   req.body.question_data = JSON.stringify(response.question_data);
 
-      // Save parameters to DB fields
-      req.body.mode = mode;
-      req.body.max_ops = max_ops;
-      req.body.rotations = rotations;
+    //   // Save parameters to DB fields
+    //   req.body.mode = mode;
+    //   req.body.max_ops = max_ops;
+    //   req.body.rotations = rotations;
 
-      // Get optimal answers from response
-      optimalAnswers = response.parameters?.answers || [];
-    }
+    //   // Get optimal answers from response
+    //   optimalAnswers = response.parameters?.answers || [];
+    // }
+
+    // // Create the question
+    // const question = await Question.create(req.body);
+
+    // // Save optimal answers if available
+    // if (optimalAnswers.length > 0) {
+    //   await OptimalAnswer.create({
+    //     question_id: question.id,
+    //     moves: JSON.stringify(optimalAnswers),
+    //   });
+    // }
 
     // Create the question
-    const question = await Question.create(req.body);
 
-    // Save optimal answers if available
-    if (optimalAnswers.length > 0) {
-      await OptimalAnswer.create({
-        question_id: question.id,
-        moves: JSON.stringify(optimalAnswers),
-      });
-    }
+    req.body.question_data = JSON.stringify(req.body.raw_questions);
+    const question = await Question.create(req.body, { transaction });
+    const match = await question.getMatch({ transaction });
+
+    await got.post(`${getServiceApi()}/game/init`, {
+      headers: {
+        Authorization: `Bearer ${req.get("Authorization")}`,
+      },
+      json: {
+        game_id: question.id,
+        start_time: Math.floor(match.start_time.getTime() / 1000),
+        end_time: Math.floor(match.end_time.getTime() / 1000),
+        ...req.body.raw_questions,
+      },
+      timeout: {
+        request: 10000,
+      },
+    });
+
+    await transaction.commit();
 
     return res.status(201).json(question);
   } catch (error) {
+    await transaction.rollback();
     let errMsg = error.response ? error.response.body : error.message;
     return res.status(500).json({ message: errMsg });
   }
@@ -298,7 +361,8 @@ const regenerateQuestion = async (req, res) => {
       question.rotations === null
     ) {
       return res.status(400).json({
-        message: "This question was created manually and cannot be regenerated. Please create a new question instead."
+        message:
+          "This question was created manually and cannot be regenerated. Please create a new question instead.",
       });
     }
 
@@ -376,11 +440,15 @@ const regenerateWithParams = async (req, res) => {
 
     // Validate parameters
     if (size < 4 || size > 24 || size % 2 !== 0) {
-      return res.status(400).json({ message: "Invalid size. Must be even number between 4 and 24." });
+      return res.status(400).json({
+        message: "Invalid size. Must be even number between 4 and 24.",
+      });
     }
 
     if (mode !== 0 && mode !== 1) {
-      return res.status(400).json({ message: "Invalid mode. Must be 0 (random) or 1 (special)." });
+      return res
+        .status(400)
+        .json({ message: "Invalid mode. Must be 0 (random) or 1 (special)." });
     }
 
     // Call service API to generate new question_data
@@ -413,7 +481,8 @@ const regenerateWithParams = async (req, res) => {
     // Update question with new parameters and question_data
     await question.update({
       name: name || question.name,
-      description: description !== undefined ? description : question.description,
+      description:
+        description !== undefined ? description : question.description,
       size,
       mode,
       max_ops,
@@ -458,9 +527,10 @@ const getOptimalAnswers = async (req, res) => {
     }
 
     const optimalAnswers = question.optimal_answers || [];
-    const moves = optimalAnswers.length > 0
-      ? JSON.parse(optimalAnswers[0].moves || "[]")
-      : [];
+    const moves =
+      optimalAnswers.length > 0
+        ? JSON.parse(optimalAnswers[0].moves || "[]")
+        : [];
 
     return res.status(200).json({
       question_id: id,

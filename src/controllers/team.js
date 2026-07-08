@@ -4,7 +4,7 @@ const { Team, Match } = require("../models");
 const { comparePassword, encryptPassword } = require("../lib/encrypt");
 const useController = require("../lib/useController");
 const { getFilter } = require("../lib/common");
-const { getAll, get, update, create, remove } = useController(Team);
+const { get, update, create, remove } = useController(Team);
 
 const filterField = {
   match_id: {
@@ -101,7 +101,7 @@ const signin = async (req, res) => {
         name: account,
         is_admin: true,
       },
-      process.env.JWT_SECRET_KEY
+      process.env.JWT_SECRET_KEY,
     );
     return res.status(200).json({
       id: 0,
@@ -127,7 +127,7 @@ const signin = async (req, res) => {
       {
         algorithm: "HS256",
         expiresIn: "2d",
-      }
+      },
     );
 
     return res.status(200).json({
