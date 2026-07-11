@@ -1,6 +1,7 @@
 const { Tournament, Round, Match, Team } = require("../models");
 const useController = require("../lib/useController");
 const { Sequelize } = require('sequelize');
+const { cleanupGamesForMatchIds } = require("./match");
 const { getAll, get, update, create, remove } = useController(Tournament);
 
 const getTournaments = async (req, res) => {
@@ -47,6 +48,24 @@ const updateTournament = async (req, res) => {
 };
 
 const removeTournament = async (req, res) => {
+  try {
+    const matches = await Match.findAll({
+      attributes: ["id"],
+      include: [
+        {
+          model: Round,
+          as: "round",
+          required: true,
+          attributes: [],
+          where: { tournament_id: req.params.id },
+        },
+      ],
+    });
+    await cleanupGamesForMatchIds(matches.map((m) => m.id), req);
+  } catch (error) {
+    if (error.status === 409) return res.status(409).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
+  }
   await remove(req, res);
 };
 

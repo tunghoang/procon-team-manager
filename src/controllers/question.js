@@ -13,6 +13,35 @@ const include = [
   },
 ];
 
+// The game service (FastAPI) requires an RFC 6750 "Bearer <token>" header,
+// while our own clients send the raw token; normalize before forwarding.
+const bearerAuth = (req) => {
+  const raw = req.get("Authorization") || "";
+  return raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
+};
+
+// Delete the game-service game backing a question id. Idempotent: a 404
+// (already gone) is treated as success. An in-progress game (409) is re-thrown
+// with a .status so the caller can return a clear 409 instead of an opaque 500.
+// force=true removes a finished game too (intentional cascade deletes).
+const deleteGameOnService = async (qid, req, { force = true } = {}) => {
+  try {
+    await got.delete(`${getServiceApi()}/game/${qid}`, {
+      searchParams: force ? { force: "true" } : {},
+      headers: { Authorization: bearerAuth(req) },
+    });
+  } catch (error) {
+    const status = error.response?.statusCode;
+    if (status === 404) return; // already deleted — nothing to do
+    if (status === 409) {
+      const e = new Error("Cannot delete: the game is currently in progress");
+      e.status = 409;
+      throw e;
+    }
+    throw error;
+  }
+};
+
 const ignore = ["start_time", "end_time"];
 
 const filterField = {
@@ -128,7 +157,9 @@ const updateQuestion = async (req, res) => {
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
     }
-    if (req.body.type === "manual" && req.body.raw_questions) {
+    // 2025-style manual boards only (arrays); HEXUDON boards are objects and
+    // cannot be edited in place — recreate the question to change the board.
+    if (req.body.type === "manual" && Array.isArray(req.body.raw_questions)) {
       const size = req.body.raw_questions.length;
       if (size < 4 || size > 24 || size % 2 !== 0) {
         return res.status(406).json({ message: "Invalid size of board" });
@@ -167,15 +198,14 @@ const removeQuestion = async (req, res) => {
       return res.status(404).json({ message: "Question not found" });
     }
 
-    await got.delete(`${getServiceApi()}/game/${question_id}`, {
-      headers: {
-        Authorization: req.get("Authorization"),
-      },
-    });
+    await deleteGameOnService(req.params.id, req);
     await transaction.commit();
     return res.sendStatus(200);
   } catch (error) {
     await transaction.rollback();
+    if (error.status === 409) {
+      return res.status(409).json({ message: error.message });
+    }
     return res.status(500).json({ message: error.message });
   }
 };
@@ -209,13 +239,7 @@ const bulkDeleteQuestions = async (req, res) => {
     });
 
     await Promise.all(
-      question_ids.map((question_id) =>
-        got.delete(`${getServiceApi()}/game/${question_id}`, {
-          headers: {
-            Authorization: `Bearer ${req.get("Authorization")}`,
-          },
-        }),
-      ),
+      question_ids.map((question_id) => deleteGameOnService(question_id, req)),
     );
 
     await transaction.commit();
@@ -226,6 +250,9 @@ const bulkDeleteQuestions = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
+    if (error.status === 409) {
+      return res.status(409).json({ message: error.message });
+    }
     return res.status(500).json({ message: error.message });
   }
 };
@@ -309,21 +336,48 @@ const createQuestion = async (req, res) => {
     //   });
     // }
 
-    // Create the question
+    // Create the question. For HEXUDON, `raw_questions` is the game-service
+    // board JSON (the `GET {service}/board` output — width/height/cells/spots/
+    // thresholds/max_fuel/agents) plus the match config the admin picked
+    // (`days: [{steps, response_time}]`, optional `agent_selection_time_limit`).
+    const board = req.body.raw_questions;
+    if (!board || typeof board !== "object" || Array.isArray(board)) {
+      await transaction.rollback();
+      return res.status(406).json({ message: "raw_questions must be a board object" });
+    }
 
-    req.body.question_data = JSON.stringify(req.body.raw_questions);
+    req.body.question_data = JSON.stringify(board);
     const question = await Question.create(req.body, { transaction });
     const match = await question.getMatch({ transaction });
 
+    // The game service fixes the team list at init: the match roster must be
+    // final before a question is created (operational rule, 2026-07-09).
+    const teams = await match.getTeams({ transaction });
+    if (!teams.length) {
+      await transaction.rollback();
+      return res.status(400).json({
+        message:
+          "Match has no teams; finalize the match roster before creating a question",
+      });
+    }
+
+    const epoch = (value) =>
+      value ? Math.floor(new Date(value).getTime() / 1000) : undefined;
+
     await got.post(`${getServiceApi()}/game/init`, {
       headers: {
-        Authorization: `Bearer ${req.get("Authorization")}`,
+        Authorization: bearerAuth(req),
       },
       json: {
+        ...board,
         game_id: question.id,
-        start_time: Math.floor(match.start_time.getTime() / 1000),
-        end_time: Math.floor(match.end_time.getTime() / 1000),
-        ...req.body.raw_questions,
+        teams: teams.map((team) => ({
+          // The game service resolves team identity from the JWT `id` claim.
+          team_id: String(team.id),
+          agents: board.agents,
+        })),
+        start_time: epoch(match.start_time),
+        stop_time: epoch(match.end_time),
       },
       timeout: {
         request: 10000,
@@ -552,4 +606,8 @@ module.exports = {
   regenerateWithParams,
   getOptimalAnswers,
   getTime,
+  // Exposed so match/round/tournament deletes can cascade the game-service
+  // cleanup (otherwise those deletes orphan game-service games).
+  deleteGameOnService,
+  bearerAuth,
 };

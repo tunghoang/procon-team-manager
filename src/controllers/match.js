@@ -1,8 +1,24 @@
 const Match = require("../models/match");
 const useController = require("../lib/useController");
-const { Team, Tournament } = require("../models");
+const { Team, Tournament, Question } = require("../models");
 const Round = require("../models/round");
+const { deleteGameOnService } = require("./question");
 const { getAll, update, create, remove } = useController(Match);
+
+// Delete the game-service games for every question under the given match ids,
+// BEFORE the manager-side cascade removes those question rows — otherwise the
+// game-service games (separate DB, no cross-DB FK) are orphaned. Re-throws a
+// 409 (game in progress) so the caller can refuse the delete cleanly.
+const cleanupGamesForMatchIds = async (matchIds, req) => {
+  if (!matchIds.length) return;
+  const questions = await Question.findAll({
+    where: { match_id: matchIds },
+    attributes: ["id"],
+  });
+  for (const q of questions) {
+    await deleteGameOnService(q.id, req);
+  }
+};
 
 const include = [
   {
@@ -128,6 +144,12 @@ const updateMatch = async (req, res) => {
 };
 
 const removeMatch = async (req, res) => {
+  try {
+    await cleanupGamesForMatchIds([req.params.id], req);
+  } catch (error) {
+    if (error.status === 409) return res.status(409).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
+  }
   await remove(req, res);
 };
 
@@ -279,4 +301,5 @@ module.exports = {
   createTeamMatch,
   bulkAddTeams,
   bulkRemoveTeams,
+  cleanupGamesForMatchIds,
 };

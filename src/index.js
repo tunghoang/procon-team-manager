@@ -14,6 +14,22 @@ const app = express();
 require("./docs.js")("/docs", app);
 require("./jobqueue.js");
 
+// Defense in depth: a single malformed request must never take the whole
+// server process down. Log and keep serving instead of crashing to a hard
+// connection-refused (which is what happened under unauthenticated probing).
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("unhandledRejection:", err);
+});
+
+const bodyParser = require("body-parser");
+app.use(bodyParser.json({ limit: "50mb" }));
+app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
+
+app.set('trust proxy', true); // Get IP from X-Forwarded-For header
+
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
 

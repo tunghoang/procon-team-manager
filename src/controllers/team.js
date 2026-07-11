@@ -94,7 +94,15 @@ const removeTeam = async (req, res) => {
 
 const signin = async (req, res) => {
   const { account, password } = req.body;
-  if (account === "admin" && password === "uetbmm") {
+  // Bootstrap admin: only available when explicitly configured through the
+  // environment (no hardcoded credentials). Used to provision the first
+  // admin account on a fresh database.
+  if (
+    process.env.BOOTSTRAP_ADMIN_ACCOUNT &&
+    process.env.BOOTSTRAP_ADMIN_PASSWORD &&
+    account === process.env.BOOTSTRAP_ADMIN_ACCOUNT &&
+    password === process.env.BOOTSTRAP_ADMIN_PASSWORD
+  ) {
     const token = jwt.sign(
       {
         id: 0,
@@ -102,9 +110,14 @@ const signin = async (req, res) => {
         is_admin: true,
       },
       process.env.JWT_SECRET_KEY,
+      {
+        algorithm: "HS256",
+        expiresIn: "2d",
+      },
     );
     return res.status(200).json({
       id: 0,
+      is_admin: true,
       token,
     });
   }
