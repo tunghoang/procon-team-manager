@@ -94,7 +94,14 @@ const removeTeam = async (req, res) => {
 
 const signin = async (req, res) => {
   const { account, password } = req.body;
-  if (account === "admin" && password === "uetbmm") {
+  const bootstrapAccount = process.env.BOOTSTRAP_ADMIN_ACCOUNT;
+  const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+  if (
+    bootstrapAccount &&
+    bootstrapPassword &&
+    account === bootstrapAccount &&
+    password === bootstrapPassword
+  ) {
     const token = jwt.sign(
       {
         id: 0,
@@ -102,6 +109,10 @@ const signin = async (req, res) => {
         is_admin: true,
       },
       process.env.JWT_SECRET_KEY,
+      {
+        algorithm: "HS256",
+        expiresIn: "2d",
+      },
     );
     return res.status(200).json({
       id: 0,

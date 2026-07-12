@@ -1,6 +1,7 @@
 const Queue = require("bee-queue");
 const got = require("got");
-const { Answer, Question } = require("./models");
+const jwt = require("jsonwebtoken");
+const { Answer } = require("./models");
 const { getServiceApi } = require("./lib/common");
 
 const options = {
@@ -20,41 +21,49 @@ const addAnswer = (answer) => {
   return answerQueue.createJob(answer).save();
 };
 
+// The HEXUDON engine has no per-answer scoring endpoint -- /game/actions
+// already validates and stores each day's plan synchronously (see
+// answer.js#createAnswer). This job's only job is to pull the team's
+// up-to-date standing from the engine's live match state afterwards, for
+// display. Both services share JWT_SECRET_KEY, so team-manager can mint its
+// own short-lived admin token for this server-to-server call instead of
+// needing a specific team's session token on hand.
+const serviceAdminToken = () =>
+  jwt.sign({ id: 0, is_admin: true }, process.env.JWT_SECRET_KEY, {
+    expiresIn: "5m",
+  });
+
 answerQueue.process(JOB_CONCURRENT, async (job, done) => {
   console.log(`Job ${job.id} starts processing`);
-  const { scoreData, answerData, questionData, answerId } = job.data;
+  const { gameId, teamId, answerId } = job.data;
   const answer = await Answer.findByPk(answerId);
   try {
-    scoreData.status = "pending";
-    await answer.update({
-      score_data: JSON.stringify(scoreData),
-    });
-    const res = await got
-      .post(`${getServiceApi()}/answer`, {
-        json: {
-          question: questionData,
-          answer_data: answerData,
-        },
+    const state = await got
+      .get(`${getServiceApi()}/game/state`, {
+        searchParams: { game_id: gameId },
+        headers: { Authorization: `Bearer ${serviceAdminToken()}` },
       })
       .json();
 
-    console.log("Response from /answer:", res);
-    // Merge with response LAST to ensure factors from Python service take precedence
+    const teamState = state.teams?.[teamId] ?? {};
+    const previousScoreData = JSON.parse(answer.score_data || "{}");
     const newScoreData = {
-      ...res,
-      resubmission_count: scoreData.resubmission_count,
-      status: "done"
+      ...previousScoreData,
+      day: state.day,
+      distinct_types: teamState.distinct_types,
+      total_servings: teamState.total_servings,
+      status: "done",
     };
-    console.log("Final score data:", newScoreData);
+    console.log("Refreshed score data:", newScoreData);
 
     await answer.update({
       score_data: JSON.stringify(newScoreData),
     });
-    return Promise.resolve(`Answer with ID ${answerId} done`);
+    return Promise.resolve(`Answer with ID ${answerId} refreshed`);
   } catch (err) {
-    scoreData.status = "failed";
+    const previousScoreData = JSON.parse(answer.score_data || "{}");
     await answer.update({
-      score_data: JSON.stringify(scoreData),
+      score_data: JSON.stringify({ ...previousScoreData, status: "failed" }),
     });
     return Promise.reject(err);
   }

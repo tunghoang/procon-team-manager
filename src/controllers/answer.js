@@ -275,14 +275,24 @@ const createAnswer = async (req, res) => {
     }, RATE_WINDOW);
     // end rate limit
 
-    const questionData = JSON.parse(question.question_data);
+    const authHeader = { Authorization: `Bearer ${req.get("Authorization")}` };
 
-    const response = await got
-      .post(`${getServiceApi()}/validate`, {
-        json: {
-          question: questionData,
-          answer_data: answerData,
-        },
+    // HEXUDON submissions are scoped to a specific day of the match; ask the
+    // engine which day is currently open before submitting this team's plan.
+    const { day } = await got
+      .get(`${getServiceApi()}/game/day`, {
+        searchParams: { game_id: questionId },
+        headers: authHeader,
+      })
+      .json();
+
+    // /game/actions validates the whole day's plan atomically and, only if
+    // valid, stores it as this team's submission for `day` -- there is no
+    // separate /validate step in this engine.
+    await got
+      .post(`${getServiceApi()}/game/actions`, {
+        json: { game_id: questionId, day, actions: answerData },
+        headers: authHeader,
       })
       .json();
 
@@ -292,12 +302,13 @@ const createAnswer = async (req, res) => {
         question_id: questionId,
       },
     });
+    const previousScoreData = JSON.parse(answer?.score_data || "{}");
     const scoreData = {
-      ...JSON.parse(answer?.score_data || "{}"),
-      ...response,
+      ...previousScoreData,
+      day,
+      resubmission_count: (previousScoreData.resubmission_count ?? -1) + 1,
+      status: "pending",
     };
-    scoreData.resubmission_count = (scoreData.resubmission_count ?? -1) + 1;
-    scoreData.status = "pending";
 
     const submittedTime = new Date();
 
@@ -316,16 +327,17 @@ const createAnswer = async (req, res) => {
       });
     }
 
-    // add to answer queue
+    // The engine already validated and stored the plan synchronously above;
+    // this job only pulls the team's refreshed standing for the dashboard.
     addAnswer({
-      scoreData,
-      answerData,
-      questionData,
+      gameId: questionId,
+      teamId,
       answerId: answer.id,
     });
 
     return res.status(200).json({
       id: answer.id,
+      day,
     });
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
@@ -369,18 +381,10 @@ const recalculateScores = async (req, res) => {
 
     for (const answer of answers) {
       try {
-        const questionData = JSON.parse(answer.question.question_data);
-        const answerData = JSON.parse(answer.answer_data);
-        const currentScoreData = JSON.parse(answer.score_data || "{}");
-
-        // Add to job queue for recalculation
+        // Re-queue a refresh of this team's standing from the engine's live state.
         addAnswer({
-          scoreData: {
-            ...currentScoreData,
-            status: "pending",
-          },
-          answerData,
-          questionData,
+          gameId: answer.question_id,
+          teamId: answer.team_id,
           answerId: answer.id,
         });
 

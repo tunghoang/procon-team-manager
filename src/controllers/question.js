@@ -128,24 +128,18 @@ const updateQuestion = async (req, res) => {
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
     }
-    if (req.body.type === "manual" && req.body.raw_questions) {
-      const size = req.body.raw_questions.length;
-      if (size < 4 || size > 24 || size % 2 !== 0) {
-        return res.status(406).json({ message: "Invalid size of board" });
-      }
-      const field = {
-        size: req.body.raw_questions.length,
-        entities: req.body.raw_questions,
-      };
-      req.body.question_data = JSON.stringify({ field });
-      // Manual questions don't have mode, max_ops, rotations
-      req.body.mode = null;
-      req.body.max_ops = null;
-      req.body.rotations = null;
 
-      // Delete existing answers and optimal answers as board is changing
-      await Answer.destroy({ where: { question_id: id } });
-      await OptimalAnswer.destroy({ where: { question_id: id } });
+    // A HEXUDON question's board (map/spots/teams/day config) is fixed at
+    // /game/init time and cannot be changed afterwards -- only name/
+    // description may be edited. This used to accept `type: "manual"` +
+    // `raw_questions` and rewrite question_data into a prior contest year's
+    // square-board shape, which would have silently corrupted a HEXUDON
+    // question's data (and desynced it from the already-registered game).
+    if (req.body.raw_questions || req.body.question_data || req.body.type) {
+      return res.status(400).json({
+        message:
+          "A question's board is immutable once created. Delete and recreate the question instead.",
+      });
     }
 
     await update(req, res);
@@ -167,9 +161,9 @@ const removeQuestion = async (req, res) => {
       return res.status(404).json({ message: "Question not found" });
     }
 
-    await got.delete(`${getServiceApi()}/game/${question_id}`, {
+    await got.delete(`${getServiceApi()}/game/${req.params.id}`, {
       headers: {
-        Authorization: req.get("Authorization"),
+        Authorization: `Bearer ${req.get("Authorization")}`,
       },
     });
     await transaction.commit();
@@ -313,16 +307,18 @@ const createQuestion = async (req, res) => {
 
     req.body.question_data = JSON.stringify(req.body.raw_questions);
     const question = await Question.create(req.body, { transaction });
-    const match = await question.getMatch({ transaction });
 
+    // raw_questions is already the full /game/init body (startsAt, daySeconds,
+    // daySteps, map, spots, fuelLimits, players, busyThreshold,
+    // jammedThreshold, teams, agent_selection_time_limit) assembled
+    // client-side -- see components/procon26/board-generator.js on the
+    // frontend. Only game_id is injected here.
     await got.post(`${getServiceApi()}/game/init`, {
       headers: {
         Authorization: `Bearer ${req.get("Authorization")}`,
       },
       json: {
         game_id: question.id,
-        start_time: Math.floor(match.start_time.getTime() / 1000),
-        end_time: Math.floor(match.end_time.getTime() / 1000),
         ...req.body.raw_questions,
       },
       timeout: {
@@ -346,168 +342,38 @@ const getTime = (req, res) => {
   });
 };
 
+// procon26-hexudon has no board-generation endpoint and no concept of
+// regenerating a map in place -- a HEXUDON match's map/spots/teams are fixed
+// for the whole match at /game/init. These two actions belonged to a prior
+// (non-HEXUDON) contest year's auto-generated square-board puzzles and have
+// no equivalent here; disabled rather than left to fail against a
+// nonexistent /board endpoint.
 const regenerateQuestion = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const question = await Question.findByPk(id);
+  const { id } = req.params;
+  const question = await Question.findByPk(id);
 
-    if (!question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-
-    if (
-      question.mode === null ||
-      question.max_ops === null ||
-      question.rotations === null
-    ) {
-      return res.status(400).json({
-        message:
-          "This question was created manually and cannot be regenerated. Please create a new question instead.",
-      });
-    }
-
-    // Get parameters from DB fields (data gốc)
-    const mode = question.mode;
-    const max_ops = question.max_ops;
-    const rotations = question.rotations;
-
-    // Get size from question_data
-    const currentData = JSON.parse(question.question_data || "{}");
-    const size = currentData.parameters?.size || currentData.field?.size || 12;
-
-    // Call service API to generate new question_data
-    const response = await got
-      .get(`${getServiceApi()}/board`, {
-        searchParams: {
-          size,
-          mode,
-          max_ops,
-          rotations,
-        },
-      })
-      .json();
-    const optimalAnswers = response.parameters?.answers || [];
-
-    // Delete all existing answers for this question
-    // Because the new board is completely different, old answers are invalid
-    const deletedAnswersCount = await Answer.destroy({
-      where: {
-        question_id: id,
-      },
-    });
-
-    // Delete all existing optimal_answers for this question
-    const deletedOptimalCount = await OptimalAnswer.destroy({
-      where: {
-        question_id: id,
-      },
-    });
-
-    // Update question with new question_data
-    await question.update({
-      question_data: JSON.stringify(response.question_data),
-    });
-
-    // Save new optimal answers
-    if (optimalAnswers.length > 0) {
-      await OptimalAnswer.create({
-        question_id: id,
-        moves: JSON.stringify(optimalAnswers),
-      });
-    }
-
-    return res.status(200).json({
-      message: "Question regenerated successfully",
-      question,
-      deletedAnswers: deletedAnswersCount,
-      deletedOptimalAnswers: deletedOptimalCount,
-    });
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    return res.status(500).json({ message: errMsg });
+  if (!question) {
+    return res.status(404).json({ message: "Question not found" });
   }
+
+  return res.status(400).json({
+    message:
+      "Regenerating a HEXUDON question's map is not supported. Delete and recreate the question instead.",
+  });
 };
 
 const regenerateWithParams = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { size, mode, max_ops, rotations, name, description } = req.body;
-    const question = await Question.findByPk(id);
+  const { id } = req.params;
+  const question = await Question.findByPk(id);
 
-    if (!question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-
-    // Validate parameters
-    if (size < 4 || size > 24 || size % 2 !== 0) {
-      return res.status(400).json({
-        message: "Invalid size. Must be even number between 4 and 24.",
-      });
-    }
-
-    if (mode !== 0 && mode !== 1) {
-      return res
-        .status(400)
-        .json({ message: "Invalid mode. Must be 0 (random) or 1 (special)." });
-    }
-
-    // Call service API to generate new question_data
-    const response = await got
-      .get(`${getServiceApi()}/board`, {
-        searchParams: {
-          size,
-          mode,
-          max_ops,
-          rotations,
-        },
-      })
-      .json();
-    const optimalAnswers = response.parameters?.answers || [];
-
-    // Delete all existing answers for this question
-    const deletedAnswersCount = await Answer.destroy({
-      where: {
-        question_id: id,
-      },
-    });
-
-    // Delete all existing optimal_answers for this question
-    const deletedOptimalCount = await OptimalAnswer.destroy({
-      where: {
-        question_id: id,
-      },
-    });
-
-    // Update question with new parameters and question_data
-    await question.update({
-      name: name || question.name,
-      description:
-        description !== undefined ? description : question.description,
-      size,
-      mode,
-      max_ops,
-      rotations,
-      question_data: JSON.stringify(response.question_data),
-    });
-
-    // Save new optimal answers
-    if (optimalAnswers.length > 0) {
-      await OptimalAnswer.create({
-        question_id: id,
-        moves: JSON.stringify(optimalAnswers),
-      });
-    }
-
-    return res.status(200).json({
-      message: "Question updated and regenerated successfully",
-      question,
-      deletedAnswers: deletedAnswersCount,
-      deletedOptimalAnswers: deletedOptimalCount,
-    });
-  } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    return res.status(500).json({ message: errMsg });
+  if (!question) {
+    return res.status(404).json({ message: "Question not found" });
   }
+
+  return res.status(400).json({
+    message:
+      "Regenerating a HEXUDON question's map is not supported. Delete and recreate the question instead.",
+  });
 };
 
 const getOptimalAnswers = async (req, res) => {
