@@ -318,8 +318,13 @@ const createQuestion = async (req, res) => {
         Authorization: `Bearer ${req.get("Authorization")}`,
       },
       json: {
-        game_id: question.id,
+        // game_id spread last on purpose: a manually-pasted raw_questions
+        // body can carry its own stray "game_id" key (e.g. copied from
+        // another question's request payload), which must never win over
+        // this question's real id -- otherwise the game gets registered
+        // under the wrong id and this question 404s with "game not found".
         ...req.body.raw_questions,
+        game_id: question.id,
       },
       timeout: {
         request: 10000,
