@@ -1,8 +1,7 @@
 const Queue = require("bee-queue");
 const got = require("got");
-const jwt = require("jsonwebtoken");
 const { Answer } = require("./models");
-const { getServiceApi } = require("./lib/common");
+const { getServiceApi, serviceAdminToken } = require("./lib/common");
 
 const options = {
   removeOnSuccess: true,
@@ -25,14 +24,7 @@ const addAnswer = (answer) => {
 // already validates and stores each day's plan synchronously (see
 // answer.js#createAnswer). This job's only job is to pull the team's
 // up-to-date standing from the engine's live match state afterwards, for
-// display. Both services share JWT_SECRET_KEY, so team-manager can mint its
-// own short-lived admin token for this server-to-server call instead of
-// needing a specific team's session token on hand.
-const serviceAdminToken = () =>
-  jwt.sign({ id: 0, is_admin: true }, process.env.JWT_SECRET_KEY, {
-    expiresIn: "5m",
-  });
-
+// display.
 answerQueue.process(JOB_CONCURRENT, async (job, done) => {
   console.log(`Job ${job.id} starts processing`);
   const { gameId, teamId, answerId } = job.data;

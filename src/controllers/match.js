@@ -1,8 +1,58 @@
+const got = require("got");
 const Match = require("../models/match");
 const useController = require("../lib/useController");
-const { Team, Tournament } = require("../models");
+const { Team, Tournament, Question } = require("../models");
 const Round = require("../models/round");
+const { getServiceApi, serviceAdminToken } = require("../lib/common");
 const { getAll, update, create, remove } = useController(Match);
+
+// Registers `team` on every already-created HEXUDON game for this match,
+// mid-match included -- the official ruleset freezes a game's roster at
+// /game/init time, but this training tool allows joining later on purpose
+// (see game_service.py's Game.add_team). Every team in a match shares the
+// same agent start cells (the docs require an identical starting layout for
+// every team), so we just reuse whichever existing team's `agents` list is
+// on file. Best-effort: a failure here (team already registered, game
+// finished, question has no board yet, service unreachable) must not block
+// the team_match association itself.
+const syncTeamToGames = async (matchId, team) => {
+  const questions = await Question.findAll({ where: { match_id: matchId } });
+  const results = [];
+  for (const question of questions) {
+    let data;
+    try {
+      data = JSON.parse(question.question_data || "{}");
+    } catch {
+      continue;
+    }
+    const teams = Array.isArray(data.teams) ? data.teams : [];
+    const agents = teams[0]?.agents;
+    if (!Array.isArray(agents) || !agents.length) continue;
+
+    try {
+      await got.post(`${getServiceApi()}/game/teams`, {
+        json: { game_id: question.id, team_id: team.id, agents },
+        headers: { Authorization: `Bearer ${serviceAdminToken()}` },
+      });
+      if (!teams.some((t) => String(t.team_id) === String(team.id))) {
+        await question.update({
+          question_data: JSON.stringify({
+            ...data,
+            teams: [...teams, { team_id: String(team.id), agents }],
+          }),
+        });
+      }
+      results.push({ question_id: question.id, ok: true });
+    } catch (err) {
+      results.push({
+        question_id: question.id,
+        ok: false,
+        message: err.response?.body || err.message,
+      });
+    }
+  }
+  return results;
+};
 
 const include = [
   {
@@ -172,9 +222,11 @@ const createTeamMatch = async (req, res) => {
       });
     }
     await match.addTeams(team);
+    const gameSync = await syncTeamToGames(matchId, team);
     return res.status(200).json({
       match_id: matchId,
       team_id: teamId,
+      game_sync: gameSync,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -209,18 +261,23 @@ const bulkAddTeams = async (req, res) => {
     }
 
     let addedCount = 0;
+    const gameSync = [];
     for (const match of matches) {
       const existingTeamIds = match.teams.map((t) => t.id);
       const teamsToAdd = teams.filter((t) => !existingTeamIds.includes(t.id));
       if (teamsToAdd.length > 0) {
         await match.addTeams(teamsToAdd);
         addedCount += teamsToAdd.length;
+        for (const team of teamsToAdd) {
+          gameSync.push(...(await syncTeamToGames(match.id, team)));
+        }
       }
     }
 
     return res.status(200).json({
       message: `Successfully added ${addedCount} team-match relationships`,
       added_count: addedCount,
+      game_sync: gameSync,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });

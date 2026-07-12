@@ -1,5 +1,14 @@
 const { Op, QueryTypes } = require("sequelize");
+const jwt = require("jsonwebtoken");
 const { sequelize } = require("../models");
+
+// Both services share JWT_SECRET_KEY, so team-manager can mint its own
+// short-lived admin token for server-to-server calls to the game service
+// instead of needing a specific team's session token on hand.
+const serviceAdminToken = () =>
+  jwt.sign({ id: 0, is_admin: true }, process.env.JWT_SECRET_KEY, {
+    expiresIn: "5m",
+  });
 
 const getFilter = (query, filterField) => {
   return Object.keys(query).reduce((cur, queryField) => {
@@ -56,4 +65,4 @@ const getServiceApi = (mode) => {
   return url
 };
 
-module.exports = { getFilter, checkValidAnswer, getServiceApi };
+module.exports = { getFilter, checkValidAnswer, getServiceApi, serviceAdminToken };
