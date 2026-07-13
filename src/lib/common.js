@@ -34,8 +34,8 @@ const getFilter = (query, filterField) => {
 const checkValidAnswer = async (match, teamId) => {
   let message = "";
   const team = await sequelize.query(
-    `SELECT * FROM team_match where team_id = ${teamId} and match_id = ${match.id}`,
-    { type: QueryTypes.SELECT }
+    `SELECT * FROM team_match where team_id = :teamId and match_id = :matchId`,
+    { replacements: { teamId, matchId: match.id }, type: QueryTypes.SELECT }
   );
   if (!team.length) message = "Team not allowed";
   else if (!match.is_active) message = "Match inactive";

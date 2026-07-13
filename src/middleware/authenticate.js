@@ -11,7 +11,7 @@ const authenticate = (req, res, next) => {
   const token =
     req.body.token ||
     req.query.token ||
-    req.header["x-access-token"] ||
+    req.headers["x-access-token"] ||
     req.get("Authorization") ||
     req.query.token;
   if (new RegExp(skipList.join("|")).test(req.originalUrl)) {

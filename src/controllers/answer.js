@@ -340,8 +340,13 @@ const createAnswer = async (req, res) => {
       day,
     });
   } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    return res.status(500).json({ message: errMsg });
+    // Propagate the game service's own status when it rejected the request
+    // (e.g. 409 = invalid plan, 404 = game not found, 403 = team not in game)
+    // instead of masking everything as a 500 -- the client needs to tell a
+    // bad submission apart from a real server error.
+    const status = error.response?.statusCode || 500;
+    const errMsg = error.response ? error.response.body : error.message;
+    return res.status(status).json({ message: errMsg });
   }
 };
 

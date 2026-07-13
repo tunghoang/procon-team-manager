@@ -12,9 +12,14 @@ const { getAll, update, create, remove } = useController(Match);
 // (see game_service.py's Game.add_team). Every team in a match shares the
 // same agent start cells (the docs require an identical starting layout for
 // every team), so we just reuse whichever existing team's `agents` list is
-// on file. Best-effort: a failure here (team already registered, game
-// finished, question has no board yet, service unreachable) must not block
-// the team_match association itself.
+// on file.
+//
+// Idempotent: the engine returns "already exists" when a team is re-synced,
+// which we treat as success so re-adding (or retrying after a partial
+// failure) is safe. Callers MUST inspect the returned results and surface a
+// non-2xx to the admin when any `ok:false` remains -- otherwise the DB says
+// the team is in the match while the engine never registered it, and that
+// team is silently locked out (every /game/day and /game/actions 403s).
 const syncTeamToGames = async (matchId, team) => {
   const questions = await Question.findAll({ where: { match_id: matchId } });
   const results = [];
@@ -44,11 +49,14 @@ const syncTeamToGames = async (matchId, team) => {
       }
       results.push({ question_id: question.id, ok: true });
     } catch (err) {
-      results.push({
-        question_id: question.id,
-        ok: false,
-        message: err.response?.body || err.message,
-      });
+      const body = err.response?.body || "";
+      const bodyText = typeof body === "string" ? body : JSON.stringify(body);
+      // Already-registered => idempotent success (safe to re-run).
+      if (/already exists/i.test(bodyText)) {
+        results.push({ question_id: question.id, ok: true, alreadyRegistered: true });
+      } else {
+        results.push({ question_id: question.id, ok: false, message: bodyText || err.message });
+      }
     }
   }
   return results;
@@ -223,6 +231,18 @@ const createTeamMatch = async (req, res) => {
     }
     await match.addTeams(team);
     const gameSync = await syncTeamToGames(matchId, team);
+    const failed = gameSync.filter((r) => !r.ok);
+    if (failed.length) {
+      // The team_match row is committed, but the engine didn't register the
+      // team on some games -- tell the admin so they can retry (sync is
+      // idempotent) instead of silently locking the team out of those games.
+      return res.status(502).json({
+        message: `Team added to the match, but ${failed.length} game(s) could not be updated. Retry to sync them.`,
+        match_id: matchId,
+        team_id: teamId,
+        game_sync: gameSync,
+      });
+    }
     return res.status(200).json({
       match_id: matchId,
       team_id: teamId,
@@ -274,6 +294,14 @@ const bulkAddTeams = async (req, res) => {
       }
     }
 
+    const failed = gameSync.filter((r) => !r.ok);
+    if (failed.length) {
+      return res.status(502).json({
+        message: `Teams added, but ${failed.length} game(s) could not be updated on the engine. Retry to sync them.`,
+        added_count: addedCount,
+        game_sync: gameSync,
+      });
+    }
     return res.status(200).json({
       message: `Successfully added ${addedCount} team-match relationships`,
       added_count: addedCount,

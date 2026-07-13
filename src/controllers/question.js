@@ -13,6 +13,23 @@ const include = [
   },
 ];
 
+// Best-effort delete of a game on the HEXUDON engine. Never throws: a game
+// that's already absent (404) or a briefly-unreachable engine must not block
+// deleting the manager's own question record. An orphaned engine game is
+// harmless (its id no longer matches any question).
+const deleteGameQuietly = async (gameId, authHeader) => {
+  try {
+    await got.delete(`${getServiceApi()}/game/${gameId}`, {
+      headers: { Authorization: authHeader },
+    });
+  } catch (err) {
+    console.warn(
+      `engine game delete for ${gameId} failed (ignored):`,
+      err.response?.statusCode || err.message,
+    );
+  }
+};
+
 const ignore = ["start_time", "end_time"];
 
 const filterField = {
@@ -71,8 +88,8 @@ const getQuestions = async (req, res) => {
         await Promise.all(
           questions.map(async (item) => {
             const team = await sequelize.query(
-              `SELECT * FROM team_match where team_id = ${teamId} and match_id = ${item.match_id}`,
-              { type: QueryTypes.SELECT },
+              `SELECT * FROM team_match where team_id = :teamId and match_id = :matchId`,
+              { replacements: { teamId, matchId: item.match_id }, type: QueryTypes.SELECT },
             );
             if (team.length) return item;
             return null;
@@ -105,8 +122,8 @@ const getQuestion = async (req, res) => {
     }
 
     const team = await sequelize.query(
-      `SELECT * FROM team_match where team_id = ${teamId} and match_id = ${question.match_id}`,
-      { type: QueryTypes.SELECT },
+      `SELECT * FROM team_match where team_id = :teamId and match_id = :matchId`,
+      { replacements: { teamId, matchId: question.match_id }, type: QueryTypes.SELECT },
     );
 
     if (!isAdmin && !team.length) {
@@ -161,12 +178,11 @@ const removeQuestion = async (req, res) => {
       return res.status(404).json({ message: "Question not found" });
     }
 
-    await got.delete(`${getServiceApi()}/game/${req.params.id}`, {
-      headers: {
-        Authorization: `Bearer ${req.get("Authorization")}`,
-      },
-    });
     await transaction.commit();
+    // Best-effort engine cleanup AFTER the DB delete is committed: the game
+    // may already be gone on the engine (404) or the engine briefly
+    // unreachable -- neither should make the question undeletable here.
+    await deleteGameQuietly(req.params.id, `Bearer ${req.get("Authorization")}`);
     return res.sendStatus(200);
   } catch (error) {
     await transaction.rollback();
@@ -202,17 +218,14 @@ const bulkDeleteQuestions = async (req, res) => {
       transaction,
     });
 
-    await Promise.all(
-      question_ids.map((question_id) =>
-        got.delete(`${getServiceApi()}/game/${question_id}`, {
-          headers: {
-            Authorization: `Bearer ${req.get("Authorization")}`,
-          },
-        }),
-      ),
-    );
-
     await transaction.commit();
+    // Best-effort engine cleanup after the DB delete commits, one per game,
+    // each swallowing its own error so one missing/failed game never rolls
+    // back (and thus un-deletes) the whole batch.
+    const authHeader = `Bearer ${req.get("Authorization")}`;
+    await Promise.all(
+      question_ids.map((question_id) => deleteGameQuietly(question_id, authHeader)),
+    );
 
     return res.status(200).json({
       message: `Successfully deleted ${deletedCount} question(s)`,
@@ -305,6 +318,18 @@ const createQuestion = async (req, res) => {
 
     // Create the question
 
+    // Re-anchor startsAt at creation time. The generate UI ships a relative
+    // `starts_in_minutes` (its baked startsAt is only a preview) so that an
+    // admin who lingers between Generate and Save can't register a game whose
+    // start time is already in the past (which would flip it straight to
+    // "finished"). A manually-pasted body without starts_in_minutes keeps its
+    // explicit absolute startsAt untouched.
+    const raw = req.body.raw_questions;
+    if (raw && raw.starts_in_minutes != null) {
+      raw.startsAt = Math.floor(Date.now() / 1000) + Number(raw.starts_in_minutes) * 60;
+      delete raw.starts_in_minutes;
+    }
+
     req.body.question_data = JSON.stringify(req.body.raw_questions);
     const question = await Question.create(req.body, { transaction });
 
@@ -336,8 +361,12 @@ const createQuestion = async (req, res) => {
     return res.status(201).json(question);
   } catch (error) {
     await transaction.rollback();
+    // Surface the game service's own status (e.g. 400 = config validation
+    // failed: bad day/steps/fuel/spot bounds) instead of masking it as 500,
+    // so the admin sees WHY the board was rejected.
+    const status = error.response?.statusCode || 500;
     let errMsg = error.response ? error.response.body : error.message;
-    return res.status(500).json({ message: errMsg });
+    return res.status(status).json({ message: errMsg });
   }
 };
 

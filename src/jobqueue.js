@@ -38,12 +38,22 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
       .json();
 
     const teamState = state.teams?.[teamId] ?? {};
+    const distinctTypes = Array.isArray(teamState.distinct_types)
+      ? teamState.distinct_types.length
+      : 0;
+    const totalServings = teamState.total_servings ?? 0;
     const previousScoreData = JSON.parse(answer.score_data || "{}");
     const newScoreData = {
       ...previousScoreData,
       day: state.day,
       distinct_types: teamState.distinct_types,
-      total_servings: teamState.total_servings,
+      total_servings: totalServings,
+      // HEXUDON has no "pairs matched / operations" score; map its real win
+      // metrics onto the columns the answers/export/summary readers expect
+      // (match_count / step_count) so those views show meaningful numbers:
+      // primary = distinct udon types, secondary = total servings.
+      match_count: distinctTypes,
+      step_count: totalServings,
       status: "done",
     };
     console.log("Refreshed score data:", newScoreData);
