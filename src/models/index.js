@@ -137,6 +137,16 @@ OptimalAnswer.belongsTo(Question, {
 
 sequelize.sync();
 
+// Lightweight idempotent migration: sequelize.sync() creates the column on a
+// fresh DB but never ALTERs an existing table, so add is_practice to the
+// `match` table if it isn't there yet. Duplicate-column errors (already added)
+// are swallowed. MySQL treats `match` as a keyword -> must be backticked.
+sequelize
+  .query(
+    "ALTER TABLE `match` ADD COLUMN `is_practice` TINYINT(1) NOT NULL DEFAULT 0",
+  )
+  .catch(() => {});
+
 module.exports = {
   sequelize,
   Team,

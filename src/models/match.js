@@ -29,6 +29,12 @@ Match.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // Practice match: each team plays its own isolated, self-paced game
+    // (the game service creates one solo game per team).
+    is_practice: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
   },
   {
     sequelize,

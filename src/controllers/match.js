@@ -35,10 +35,27 @@ const syncTeamToGames = async (matchId, team) => {
     if (!Array.isArray(agents) || !agents.length) continue;
 
     try {
-      await got.post(`${getServiceApi()}/game/teams`, {
-        json: { game_id: question.id, team_id: team.id, agents },
-        headers: { Authorization: `Bearer ${serviceAdminToken()}` },
-      });
+      if (data.is_practice) {
+        // Practice: the new team gets its OWN solo game "{question.id}:{team.id}"
+        // (same board/start cells), not a seat in a shared game.
+        const base = { ...data };
+        delete base.game_id;
+        await got.post(`${getServiceApi()}/game/init`, {
+          headers: { Authorization: `Bearer ${serviceAdminToken()}` },
+          json: {
+            ...base,
+            game_id: `${question.id}:${team.id}`,
+            teams: [{ team_id: String(team.id), agents }],
+            players: 1,
+            is_practice: true,
+          },
+        });
+      } else {
+        await got.post(`${getServiceApi()}/game/teams`, {
+          json: { game_id: question.id, team_id: team.id, agents },
+          headers: { Authorization: `Bearer ${serviceAdminToken()}` },
+        });
+      }
       if (!teams.some((t) => String(t.team_id) === String(team.id))) {
         await question.update({
           question_data: JSON.stringify({

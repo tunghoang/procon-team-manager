@@ -316,45 +316,56 @@ const createQuestion = async (req, res) => {
     //   });
     // }
 
-    // Create the question
-
-    // Re-anchor startsAt at creation time. The generate UI ships a relative
-    // `starts_in_minutes` (its baked startsAt is only a preview) so that an
-    // admin who lingers between Generate and Save can't register a game whose
-    // start time is already in the past (which would flip it straight to
-    // "finished"). A manually-pasted body without starts_in_minutes keeps its
-    // explicit absolute startsAt untouched.
+    // Create the question. startsAt in raw_questions is now an ABSOLUTE Day-1
+    // time the admin picked (defaulting from the match's start_time) -- used
+    // as-is, no re-anchoring. A stray legacy `starts_in_minutes` (from an older
+    // client) is still honored for back-compat, then stripped.
     const raw = req.body.raw_questions;
     if (raw && raw.starts_in_minutes != null) {
       raw.startsAt = Math.floor(Date.now() / 1000) + Number(raw.starts_in_minutes) * 60;
       delete raw.starts_in_minutes;
     }
 
-    req.body.question_data = JSON.stringify(req.body.raw_questions);
+    // Practice match? Each team then plays its OWN isolated, self-paced game.
+    const match = await Match.findByPk(req.body.match_id, { transaction });
+    const isPractice = !!match?.is_practice;
+    if (raw) raw.is_practice = isPractice; // so the frontend detects practice from question_data
+
+    req.body.question_data = JSON.stringify(raw);
     const question = await Question.create(req.body, { transaction });
 
-    // raw_questions is already the full /game/init body (startsAt, daySeconds,
-    // daySteps, map, spots, fuelLimits, players, busyThreshold,
-    // jammedThreshold, teams, agent_selection_time_limit) assembled
-    // client-side -- see components/procon26/board-generator.js on the
-    // frontend. Only game_id is injected here.
-    await got.post(`${getServiceApi()}/game/init`, {
-      headers: {
-        Authorization: `Bearer ${req.get("Authorization")}`,
-      },
-      json: {
-        // game_id spread last on purpose: a manually-pasted raw_questions
-        // body can carry its own stray "game_id" key (e.g. copied from
-        // another question's request payload), which must never win over
-        // this question's real id -- otherwise the game gets registered
-        // under the wrong id and this question 404s with "game not found".
-        ...req.body.raw_questions,
-        game_id: question.id,
-      },
-      timeout: {
-        request: 10000,
-      },
-    });
+    // raw_questions is the full /game/init body (startsAt, daySeconds, daySteps,
+    // map, spots, fuelLimits, players, busyThreshold, jammedThreshold, teams,
+    // agent_selection_time_limit) assembled client-side. game_id spread last so
+    // a stray game_id inside a pasted body can't override the real id.
+    const authHeader = `Bearer ${req.get("Authorization")}`;
+    const base = { ...raw };
+    delete base.game_id;
+
+    if (isPractice) {
+      // One solo game per team, id "{question.id}:{team_id}". All share the
+      // same board and start cells; each runs independently, self-paced.
+      const teams = Array.isArray(raw.teams) ? raw.teams : [];
+      for (const t of teams) {
+        await got.post(`${getServiceApi()}/game/init`, {
+          headers: { Authorization: authHeader },
+          json: {
+            ...base,
+            game_id: `${question.id}:${t.team_id}`,
+            teams: [t],
+            players: 1,
+            is_practice: true,
+          },
+          timeout: { request: 10000 },
+        });
+      }
+    } else {
+      await got.post(`${getServiceApi()}/game/init`, {
+        headers: { Authorization: authHeader },
+        json: { ...base, game_id: question.id },
+        timeout: { request: 10000 },
+      });
+    }
 
     await transaction.commit();
 
