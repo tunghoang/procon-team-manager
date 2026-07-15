@@ -147,6 +147,14 @@ sequelize
   )
   .catch(() => {});
 
+// Same idempotent migration for competitive practice (no day reset). Only
+// meaningful when is_practice is also set.
+sequelize
+  .query(
+    "ALTER TABLE `match` ADD COLUMN `no_reset` TINYINT(1) NOT NULL DEFAULT 0",
+  )
+  .catch(() => {});
+
 module.exports = {
   sequelize,
   Team,

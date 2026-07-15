@@ -35,6 +35,13 @@ Match.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // Competitive practice (only meaningful with is_practice): a submitted day
+    // is final -- teams can't reset or re-submit an earlier day, and compete on
+    // a shared leaderboard. Plain self-paced practice leaves this false.
+    no_reset: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
   },
   {
     sequelize,

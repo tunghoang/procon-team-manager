@@ -327,9 +327,15 @@ const createQuestion = async (req, res) => {
     }
 
     // Practice match? Each team then plays its OWN isolated, self-paced game.
+    // Competitive practice (no_reset) is a practice match where submissions are
+    // final (no day reset) and teams share a leaderboard.
     const match = await Match.findByPk(req.body.match_id, { transaction });
     const isPractice = !!match?.is_practice;
-    if (raw) raw.is_practice = isPractice; // so the frontend detects practice from question_data
+    const noReset = isPractice && !!match?.no_reset;
+    if (raw) {
+      raw.is_practice = isPractice; // so the frontend detects practice from question_data
+      raw.no_reset = noReset;
+    }
 
     req.body.question_data = JSON.stringify(raw);
     const question = await Question.create(req.body, { transaction });
@@ -355,6 +361,7 @@ const createQuestion = async (req, res) => {
             teams: [t],
             players: 1,
             is_practice: true,
+            no_reset: noReset,
           },
           timeout: { request: 10000 },
         });

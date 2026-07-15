@@ -48,6 +48,7 @@ const syncTeamToGames = async (matchId, team) => {
             teams: [{ team_id: String(team.id), agents }],
             players: 1,
             is_practice: true,
+            no_reset: !!data.no_reset,
           },
         });
       } else {
