@@ -348,9 +348,9 @@ const createQuestion = async (req, res) => {
     const base = { ...raw };
     delete base.game_id;
 
-    if (isPractice) {
-      // One solo game per team, id "{question.id}:{team_id}". All share the
-      // same board and start cells; each runs independently, self-paced.
+    if (isPractice && !noReset) {
+      // Plain practice: one solo game per team, id "{question.id}:{team_id}".
+      // All share the same board/start cells; each runs independently, self-paced.
       const teams = Array.isArray(raw.teams) ? raw.teams : [];
       for (const t of teams) {
         await got.post(`${getServiceApi()}/game/init`, {
@@ -361,12 +361,15 @@ const createQuestion = async (req, res) => {
             teams: [t],
             players: 1,
             is_practice: true,
-            no_reset: noReset,
+            no_reset: false,
           },
           timeout: { request: 10000 },
         });
       }
     } else {
+      // ONE shared game for the whole match -- both timed competitive AND
+      // competitive practice (no_reset): all teams compete on one board/timeline.
+      // (base carries is_practice + no_reset from raw.)
       await got.post(`${getServiceApi()}/game/init`, {
         headers: { Authorization: authHeader },
         json: { ...base, game_id: question.id },

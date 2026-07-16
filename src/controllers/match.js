@@ -35,9 +35,9 @@ const syncTeamToGames = async (matchId, team) => {
     if (!Array.isArray(agents) || !agents.length) continue;
 
     try {
-      if (data.is_practice) {
-        // Practice: the new team gets its OWN solo game "{question.id}:{team.id}"
-        // (same board/start cells), not a seat in a shared game.
+      if (data.is_practice && !data.no_reset) {
+        // Plain practice: the new team gets its OWN solo game
+        // "{question.id}:{team.id}" (same board/start cells), not a shared seat.
         const base = { ...data };
         delete base.game_id;
         await got.post(`${getServiceApi()}/game/init`, {
@@ -48,10 +48,12 @@ const syncTeamToGames = async (matchId, team) => {
             teams: [{ team_id: String(team.id), agents }],
             players: 1,
             is_practice: true,
-            no_reset: !!data.no_reset,
+            no_reset: false,
           },
         });
       } else {
+        // Shared game (timed competitive OR competitive practice): join the one
+        // game at question.id.
         await got.post(`${getServiceApi()}/game/teams`, {
           json: { game_id: question.id, team_id: team.id, agents },
           headers: { Authorization: `Bearer ${serviceAdminToken()}` },
