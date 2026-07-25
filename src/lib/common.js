@@ -49,6 +49,45 @@ const checkValidAnswer = async (match, teamId) => {
   return message;
 };
 
+/**
+ * Pull a table's AUTO_INCREMENT counter back down to MAX(id) + 1.
+ *
+ * InnoDB never lowers that counter on its own, and all three of these were
+ * measured on MySQL 9.7: a unique-key clash burns a number (row 1 -> next id 3),
+ * a rolled-back transaction burns one (3 -> 5), and a DELETE simply leaves its
+ * gap behind (delete 5 -> next id 6). So creating a team after any failed
+ * attempt, or after clearing out test teams, produced jumped ids (1, 2, 7, ...),
+ * which reads as data loss to an operator.
+ *
+ * MySQL clamps the value to at least MAX(id) + 1, so this can never hand out an
+ * id that a live row already holds. It only closes the gap at the TAIL: an
+ * interior hole (delete team 2 of 1,2,3) is left alone on purpose, because
+ * recycling that id would silently give a new team the roster slot the deleted
+ * one still occupies inside an already-initialized game on the game service.
+ *
+ * Cosmetic, so failures are swallowed: the delete/create result must not depend
+ * on it (a non-MySQL dialect or a lacking ALTER grant just keeps the gaps).
+ */
+const resyncAutoIncrement = async (Model) => {
+  try {
+    const pk = Model.primaryKeyAttribute;
+    if (pk !== "id" || !Model.rawAttributes?.id?.autoIncrement) return;
+    const table = Model.getTableName();
+    const name = typeof table === "string" ? table : table.tableName;
+    const max = await Model.max("id");
+    const next = Number.isFinite(Number(max)) && max != null ? Number(max) + 1 : 1;
+    if (!Number.isInteger(next) || next < 1) return;
+    // `match` is a MySQL keyword -> the table name must stay backticked. `next`
+    // is a validated integer, never user input, so it is safe to interpolate
+    // (ALTER TABLE does not accept bind parameters).
+    await Model.sequelize.query(
+      `ALTER TABLE \`${name}\` AUTO_INCREMENT = ${next}`,
+    );
+  } catch (error) {
+    // Ignore: ids keep their gaps, nothing else changes.
+  }
+};
+
 let loadTurn = 0;
 const getServiceApi = (mode) => {
   // Load balancing
@@ -65,4 +104,10 @@ const getServiceApi = (mode) => {
   return url
 };
 
-module.exports = { getFilter, checkValidAnswer, getServiceApi, serviceAdminToken };
+module.exports = {
+  getFilter,
+  checkValidAnswer,
+  getServiceApi,
+  serviceAdminToken,
+  resyncAutoIncrement,
+};

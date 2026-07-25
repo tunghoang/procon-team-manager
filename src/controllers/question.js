@@ -2,7 +2,11 @@ const got = require("got");
 const useController = require("../lib/useController");
 const { Match, Question, Answer, OptimalAnswer } = require("../models");
 const { update } = useController(Question);
-const { getFilter, getServiceApi } = require("../lib/common");
+const {
+  getFilter,
+  getServiceApi,
+  resyncAutoIncrement,
+} = require("../lib/common");
 const { sequelize } = require("../models");
 const { QueryTypes } = require("sequelize");
 
@@ -179,6 +183,7 @@ const removeQuestion = async (req, res) => {
     }
 
     await transaction.commit();
+    await resyncAutoIncrement(Question);
     // Best-effort engine cleanup AFTER the DB delete is committed: the game
     // may already be gone on the engine (404) or the engine briefly
     // unreachable -- neither should make the question undeletable here.
@@ -219,6 +224,7 @@ const bulkDeleteQuestions = async (req, res) => {
     });
 
     await transaction.commit();
+    await resyncAutoIncrement(Question);
     // Best-effort engine cleanup after the DB delete commits, one per game,
     // each swallowing its own error so one missing/failed game never rolls
     // back (and thus un-deletes) the whole batch.
@@ -382,6 +388,10 @@ const createQuestion = async (req, res) => {
     return res.status(201).json(question);
   } catch (error) {
     await transaction.rollback();
+    // The rolled-back INSERT still consumed the question's AUTO_INCREMENT id
+    // (InnoDB never returns it), so a board rejected by /game/init would make
+    // the next question -- and the game_id it becomes -- skip a number.
+    await resyncAutoIncrement(Question);
     // Surface the game service's own status (e.g. 400 = config validation
     // failed: bad day/steps/fuel/spot bounds) instead of masking it as 500,
     // so the admin sees WHY the board was rejected.

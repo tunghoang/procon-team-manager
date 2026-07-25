@@ -1,4 +1,4 @@
-const { getFilter } = require("./common");
+const { getFilter, resyncAutoIncrement } = require("./common");
 
 const useController = (Model) => {
   const getAll = async (req, res, ignore, include, filterField) => {
@@ -45,6 +45,9 @@ const useController = (Model) => {
         id: data.id,
       });
     } catch (error) {
+      // A rejected INSERT still consumed an AUTO_INCREMENT value in InnoDB, so
+      // the NEXT successful create would skip an id. Give the number back.
+      await resyncAutoIncrement(Model);
       return res.status(500).json({ message: error.message });
     }
   };
@@ -77,6 +80,10 @@ const useController = (Model) => {
         });
       }
       await data.destroy();
+      // Deleting the newest row(s) must not leave the counter above them, or
+      // re-creating (e.g. clearing test teams before an event) restarts at a
+      // jumped id instead of continuing the sequence.
+      await resyncAutoIncrement(Model);
       return res.status(200).json({
         id,
       });
