@@ -46,6 +46,29 @@ Question.init(
       type: DataTypes.INTEGER,
       defaultValue: 0,
     },
+    // Auto-reset cron: every N minutes the question's game(s) are wiped back to
+    // the agent-selection stage so the same board can be played again (see
+    // lib/autoReset.js). 0 = off.
+    auto_reset_minutes: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    // When the next automatic reset is due, as EPOCH SECONDS. Also the
+    // scheduler's claim token: the tick only resets rows whose due time has
+    // passed, and moves the time forward in the same statement, so two app
+    // instances can never both fire the same reset.
+    //
+    // Deliberately not a DATETIME. This deployment's MySQL session runs at
+    // +00:00 while Node runs at +07:00 and dbInstance sets no `timezone`, so a
+    // JS Date written to a DATETIME comes back 7 h out (measured: stored
+    // "20:37" local wall clock against a UTC NOW(), read back as 03:37 the next
+    // day) -- the cron's "is it due yet?" comparison silently never matched. An
+    // integer has no timezone to disagree about.
+    auto_reset_at_sec: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
   },
   {
     sequelize,

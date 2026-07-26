@@ -15,6 +15,8 @@ const app = express();
 
 require("./docs.js")("/docs", app);
 require("./jobqueue.js");
+// Per-question auto-reset cron (admin-configured interval; 0 = off for all).
+require("./lib/autoReset.js").startAutoResetCron();
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";

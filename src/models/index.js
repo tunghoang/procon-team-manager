@@ -135,27 +135,46 @@ OptimalAnswer.belongsTo(Question, {
   onDelete: "cascade",
 });
 
-sequelize.sync();
+// Lightweight idempotent migrations: sequelize.sync() creates a column on a
+// fresh DB but never ALTERs an existing table, so each added column is applied
+// by hand here. Duplicate-column errors (already applied) are swallowed, and
+// MySQL treats `match` as a keyword -> must be backticked.
+//
+// Sequenced AFTER sync() resolves, and one at a time: fired concurrently with
+// sync (as they used to be) they race it for the table's metadata lock, and
+// because the error is swallowed a lost race left the column silently missing
+// -- measured on MySQL 9.7, where `auto_reset_minutes` never appeared and every
+// auto-reset tick then failed with "Unknown column".
+const ADDED_COLUMNS = [
+  "ALTER TABLE `match` ADD COLUMN `is_practice` TINYINT(1) NOT NULL DEFAULT 0",
+  // Competitive practice (no day reset). Only meaningful with is_practice.
+  "ALTER TABLE `match` ADD COLUMN `no_reset` TINYINT(1) NOT NULL DEFAULT 0",
+  // Per-question auto-reset cron (lib/autoReset.js): the interval in minutes
+  // (0 = off) and when the next reset is due, which doubles as the claim token.
+  // Epoch seconds, not DATETIME -- see the column comment in models/question.js
+  // for the timezone skew that ruled DATETIME out.
+  "ALTER TABLE `question` ADD COLUMN `auto_reset_minutes` INT NOT NULL DEFAULT 0",
+  "ALTER TABLE `question` ADD COLUMN `auto_reset_at_sec` BIGINT NULL",
+  // Short-lived DATETIME version of the column above; dropped where it exists.
+  "ALTER TABLE `question` DROP COLUMN `auto_reset_at`",
+];
 
-// Lightweight idempotent migration: sequelize.sync() creates the column on a
-// fresh DB but never ALTERs an existing table, so add is_practice to the
-// `match` table if it isn't there yet. Duplicate-column errors (already added)
-// are swallowed. MySQL treats `match` as a keyword -> must be backticked.
-sequelize
-  .query(
-    "ALTER TABLE `match` ADD COLUMN `is_practice` TINYINT(1) NOT NULL DEFAULT 0",
-  )
-  .catch(() => {});
-
-// Same idempotent migration for competitive practice (no day reset). Only
-// meaningful when is_practice is also set.
-sequelize
-  .query(
-    "ALTER TABLE `match` ADD COLUMN `no_reset` TINYINT(1) NOT NULL DEFAULT 0",
-  )
-  .catch(() => {});
+const migrated = sequelize.sync().then(async () => {
+  for (const statement of ADDED_COLUMNS) {
+    try {
+      await sequelize.query(statement);
+      console.log(`applied migration: ${statement}`);
+    } catch {
+      /* already there */
+    }
+  }
+});
 
 module.exports = {
+  // Resolves once sync + the column migrations above have run. Anything that
+  // queries an added column on boot (the auto-reset cron) should await it
+  // rather than logging "Unknown column" for its first few ticks.
+  migrated,
   sequelize,
   Team,
   Tournament,

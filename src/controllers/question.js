@@ -7,6 +7,12 @@ const {
   getServiceApi,
   resyncAutoIncrement,
 } = require("../lib/common");
+const {
+  MAX_MINUTES,
+  MIN_MINUTES,
+  nextDueSec,
+} = require("../lib/autoResetPlan");
+const { redactQuestionForTeam } = require("../lib/questionVisibility");
 const { sequelize } = require("../models");
 const { QueryTypes } = require("sequelize");
 
@@ -95,7 +101,7 @@ const getQuestions = async (req, res) => {
               `SELECT * FROM team_match where team_id = :teamId and match_id = :matchId`,
               { replacements: { teamId, matchId: item.match_id }, type: QueryTypes.SELECT },
             );
-            if (team.length) return item;
+            if (team.length) return redactQuestionForTeam(item);
             return null;
           }),
         )
@@ -136,7 +142,9 @@ const getQuestion = async (req, res) => {
       });
     }
 
-    return res.status(200).json(question);
+    return res
+      .status(200)
+      .json(isAdmin ? question : redactQuestionForTeam(question));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -167,6 +175,41 @@ const updateQuestion = async (req, res) => {
   } catch (error) {
     let errMsg = error.response ? error.response.body : error.message;
     return res.status(500).json({ message: errMsg });
+  }
+};
+
+/**
+ * Turn the auto-reset cron on/off for one question (admin only).
+ *
+ * `minutes` 0 clears it; anything else must land inside [MIN_MINUTES,
+ * MAX_MINUTES]. Enabling schedules the first reset one interval from now --
+ * never immediately, so an admin can't wipe a running match by opening the
+ * dialog. The cron itself lives in lib/autoReset.js.
+ */
+const setQuestionAutoReset = async (req, res) => {
+  try {
+    const question = await Question.findByPk(req.params.id);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+    const minutes = Number(req.body.minutes);
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_MINUTES) {
+      return res.status(400).json({
+        message: `minutes must be an integer from 0 (off) to ${MAX_MINUTES}`,
+      });
+    }
+    if (minutes > 0 && minutes < MIN_MINUTES) {
+      return res
+        .status(400)
+        .json({ message: `the shortest interval is ${MIN_MINUTES} minute(s)` });
+    }
+    await question.update({
+      auto_reset_minutes: minutes,
+      auto_reset_at_sec: minutes > 0 ? nextDueSec(minutes) : null,
+    });
+    return res.status(200).json(question);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -483,4 +526,5 @@ module.exports = {
   regenerateWithParams,
   getOptimalAnswers,
   getTime,
+  setQuestionAutoReset,
 };
