@@ -5,9 +5,11 @@
  *
  * These pin the decisions taken for this competition: a match is scored by
  * finishing position (1st = 1), the round total is the sum of positions with
- * the SMALLEST total winning, a rostered team that did not compete takes the
- * match's LAST position (so sitting one out never pays off), and a team that
- * was not on a match's roster simply has no entry for it.
+ * the SMALLEST total winning, a rostered team that did not compete -- answered
+ * no day at all -- takes the match's LAST position (so sitting one out never
+ * pays off), and a team that was not on a match's roster simply has no entry
+ * for it. Missing the agent-kind window is NOT sitting out: such a team plays
+ * as all-patrol and is ranked on what it scored.
  */
 
 const assert = require("assert");
@@ -29,6 +31,8 @@ const detailFor = (ids, overrides = {}) =>
         total_servings: 0,
         cumulative_response_time: 0,
         missed_selection: false,
+        // Played every day of a 4-day match unless a case says otherwise.
+        days_submitted: 4,
         ...(overrides[String(id)] || {}),
       },
     ])
@@ -61,10 +65,10 @@ const tests = {
     assert.deepStrictEqual(summary.teams.map((t) => t.rank), [1, 2, 3]);
   },
 
-  "a rostered team that did not choose its agent kinds takes last place"() {
+  "a rostered team that answered no day takes last place"() {
     const summary = buildRoundSummary(
       [
-        match(10, [1, 2, 3], { 3: { missed_selection: true } }),
+        match(10, [1, 2, 3], { 3: { days_submitted: 0 } }),
         match(11, [1, 2, 3]),
       ],
       TEAMS
@@ -76,14 +80,49 @@ const tests = {
     assert.strictEqual(gamma.rank_points, 6, "3 (last of 3) + 3");
     assert.strictEqual(gamma.per_match[10].position, 3);
     assert.strictEqual(gamma.per_match[10].competed, false);
-    assert.strictEqual(gamma.per_match[10].missed_selection, true);
+  },
+
+  "missing the agent-kind window costs the choice, not the position"() {
+    // Beta played the whole match with the all-patrol default the engine gave
+    // it. That is a real entry: it keeps the position it earned.
+    const summary = buildRoundSummary(
+      [match(10, [2, 1, 3], { 2: { missed_selection: true } })],
+      TEAMS
+    );
+    const beta = byName(summary, "Beta");
+    assert.strictEqual(beta.per_match[10].competed, true);
+    assert.strictEqual(beta.per_match[10].position, 1, "it won the match");
+    assert.strictEqual(beta.per_match[10].missed_selection, true, "still noted");
+    assert.strictEqual(beta.matches_missed, 0);
+  },
+
+  "a legacy result without days_submitted falls back to missed_selection"() {
+    // Results stored before the engine counted answered days: back then the
+    // flag also meant "barred from submitting".
+    const legacy = {
+      question_id: 10,
+      match_name: "Match 10",
+      question_name: "Q10",
+      result: {
+        ranking: ["1", "2", "3"],
+        detail: {
+          1: { distinct_types: 1 },
+          2: { distinct_types: 0 },
+          3: { distinct_types: 0, missed_selection: true },
+        },
+      },
+    };
+    const summary = buildRoundSummary([legacy], TEAMS);
+    assert.strictEqual(byName(summary, "Beta").per_match[10].competed, true);
+    assert.strictEqual(byName(summary, "Gamma").per_match[10].competed, false);
+    assert.strictEqual(byName(summary, "Gamma").per_match[10].position, 3);
   },
 
   "sitting a match out can never beat playing it"() {
     // Gamma misses match 10 and comes 2nd in 11; Beta plays both (2nd, 1st).
     const summary = buildRoundSummary(
       [
-        match(10, [1, 2, 3], { 3: { missed_selection: true } }),
+        match(10, [1, 2, 3], { 3: { days_submitted: 0 } }),
         match(11, [2, 3, 1]),
       ],
       TEAMS
@@ -102,7 +141,7 @@ const tests = {
     // The engine can sort an all-zero absentee ABOVE a team that played and
     // scored nothing; positions must still be numbered among competitors.
     const summary = buildRoundSummary(
-      [match(10, [1, 3, 2], { 3: { missed_selection: true } })],
+      [match(10, [1, 3, 2], { 3: { days_submitted: 0 } })],
       TEAMS
     );
     assert.strictEqual(byName(summary, "Alpha").per_match[10].position, 1);
@@ -118,8 +157,8 @@ const tests = {
     const summary = buildRoundSummary(
       [
         match(10, [1, 2, 3], {
-          2: { missed_selection: true },
-          3: { missed_selection: true },
+          2: { days_submitted: 0 },
+          3: { days_submitted: 0 },
         }),
       ],
       TEAMS
@@ -176,7 +215,7 @@ const tests = {
       [
         match(10, [1, 2, 3], {
           1: { distinct_types: 4, total_servings: 9, cumulative_response_time: 3 },
-          3: { missed_selection: true, distinct_types: 99, total_servings: 99 },
+          3: { days_submitted: 0, distinct_types: 99, total_servings: 99 },
         }),
         match(11, [1, 2, 3], {
           1: { distinct_types: 2, total_servings: 5, cumulative_response_time: 7 },

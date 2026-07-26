@@ -4,10 +4,11 @@
  * Scoring, as decided for this competition:
  *   - a team's score in one match is its FINISHING POSITION there (1st = 1);
  *   - the round total is the sum of those positions, so the SMALLEST total wins;
- *   - a team that was ON THAT MATCH'S ROSTER but never competed -- it let the
- *     agent-kind window close without choosing, which the engine records as
- *     missed_selection and which bars it from submitting -- takes the match's
- *     LAST position. Sitting a match out must never pay off;
+ *   - a team that was ON THAT MATCH'S ROSTER but never competed -- it answered
+ *     no day at all (days_submitted 0) -- takes the match's LAST position.
+ *     Sitting a match out must never pay off. Note that merely missing the
+ *     agent-kind window is NOT sitting out: the engine defaults such a team to
+ *     all-patrol and it plays on, so it is ranked on what it scored;
  *   - a team that was not on that match's roster has nothing to score there, so
  *     the match simply does not appear for it.
  *
@@ -21,8 +22,17 @@
  * tested directly -- see hexudonSummary.test.js.
  */
 
-/** A team that never chose its agent kinds has no entry in that match. */
-const competed = (detail) => !!detail && detail.missed_selection !== true;
+/**
+ * Did this team actually play the match? `days_submitted` is the engine's count
+ * of days it answered. Results produced before that field existed fall back to
+ * the old signal (missed_selection), which back then also meant "barred from
+ * submitting".
+ */
+const competed = (detail) => {
+  if (!detail) return false;
+  if (typeof detail.days_submitted === "number") return detail.days_submitted > 0;
+  return detail.missed_selection !== true;
+};
 
 /**
  * Turn one game's /game/result into per-team rows carrying a position each.
@@ -52,7 +62,10 @@ const positionsFor = (result) => {
       cumulative_daily_types: teamDetail.cumulative_daily_types ?? 0,
       total_servings: teamDetail.total_servings ?? 0,
       cumulative_response_time: teamDetail.cumulative_response_time ?? 0,
+      // Played with agent kinds it did not choose (all-patrol default) -- shown
+      // as a note next to its position, not as a penalty.
       missed_selection: teamDetail.missed_selection === true,
+      days_submitted: teamDetail.days_submitted ?? 0,
     };
   });
 };
@@ -112,6 +125,7 @@ const buildRoundSummary = (matches, teams) => {
         counted: row.counted,
         competed: row.competed,
         missed_selection: row.missed_selection,
+        days_submitted: row.days_submitted,
         distinct_types: row.distinct_types,
         cumulative_daily_types: row.cumulative_daily_types,
         total_servings: row.total_servings,
