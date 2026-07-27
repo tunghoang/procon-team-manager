@@ -25,19 +25,14 @@ const question = (data, id = 42) => ({
 });
 
 const tests = {
-  "a timed match resets the one shared game, one window before Day 1"() {
+  "a timed match restarts at now, which reopens the agent-kind window"() {
+    // startsAt OPENS the window (Day 1 is one window later), so `now` gives the
+    // replayed match its whole window back.
     const targets = autoResetTargets(
       question({ startsAt: 1, agent_selection_time_limit: 45 }),
       [],
       NOW_MS,
     );
-    assert.deepStrictEqual(targets, [
-      { gameId: "42", startsAt: 1_700_000_000 + 45 },
-    ]);
-  },
-
-  "a timed match with no window configured restarts at now"() {
-    const targets = autoResetTargets(question({ startsAt: 1 }), [], NOW_MS);
     assert.deepStrictEqual(targets, [{ gameId: "42", startsAt: 1_700_000_000 }]);
   },
 
