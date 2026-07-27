@@ -2,11 +2,13 @@
  * What a TEAM may read of a question before its match opens.
  *
  * `question_data` IS the /game/init body: map, spots, day steps, fuel cap,
- * thresholds -- the match's whole puzzle. The game service withholds exactly
- * that from a team until `startsAt` (see `Game.board_is_public`), and this
- * endpoint is the other route to the same bytes, so it has to withhold the same
- * thing or the gate is decorative: a team could pull the board from the manager
- * during the agent-kind window and spend the entire lead-in planning on it.
+ * thresholds -- the match's whole puzzle. The docs publish that in the
+ * pre-match phase, so the game service serves it from
+ * `startsAt - agent_selection_time_limit` (when the agent-kind window opens --
+ * see `Game.board_is_public`) and withholds it before then. This endpoint is
+ * the other route to the same bytes, so it has to hold the same line or the
+ * gate is decorative: a team could pull the board from the manager and spend
+ * the entire lead-in planning on it.
  *
  * What survives is schedule only -- when Day 1 opens, how long the agent-kind
  * window is, and which mode the question runs in (the play screen picks its
@@ -44,9 +46,12 @@ const redactQuestionForTeam = (question, nowSec = Date.now() / 1000) => {
     return { ...toPlain(question), question_data: null };
   }
   const startsAt = Number(data.startsAt);
+  // startsAt is Day 1; the board goes public one agent-kind window earlier.
+  const window = Number(data.agent_selection_time_limit);
+  const publishedAt = startsAt - (Number.isFinite(window) ? window : 0);
   // No parsable start time means nothing to gate on; a board with no schedule
   // is a practice/manual row, and hiding it forever would break those screens.
-  if (data.is_practice || !Number.isFinite(startsAt) || nowSec >= startsAt) {
+  if (data.is_practice || !Number.isFinite(startsAt) || nowSec >= publishedAt) {
     return question;
   }
   const kept = {};

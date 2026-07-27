@@ -32,10 +32,11 @@ const nextDueSec = (minutes, fromMs = Date.now()) =>
  *   competitive practice  -> the one shared game, self-paced (no startsAt)
  *   timed match           -> the one shared game, re-anchored to a new Day 1
  *
- * The timed case re-anchors to `now`: `startsAt` OPENS the agent-kind window
- * (and publishes the board), with Day 1 one window later, so `now` restarts the
- * match immediately with the full window intact -- which is the whole point of
- * replaying it.
+ * The timed case re-anchors Day 1 to `now + agent_selection_time_limit`, NOT to
+ * `now`: `startsAt` is Day 1's opening and `Game.reset(base)` puts the
+ * pre-match window in `[base - limit, base)`, so resetting to `now` would hand
+ * every team an already-closed window (and no time with the board) and default
+ * them all to all-patrol. Giving that phase back is the point of replaying.
  */
 const autoResetTargets = (question, teamIds = [], nowMs = Date.now()) => {
   const data = parseQuestionData(question);
@@ -51,7 +52,13 @@ const autoResetTargets = (question, teamIds = [], nowMs = Date.now()) => {
   if (isPractice) {
     return [{ gameId: String(question.id), startsAt: undefined }];
   }
-  return [{ gameId: String(question.id), startsAt: Math.floor(nowMs / 1000) }];
+  const selectionSeconds = Number(data.agent_selection_time_limit) || 0;
+  return [
+    {
+      gameId: String(question.id),
+      startsAt: Math.floor(nowMs / 1000) + selectionSeconds,
+    },
+  ];
 };
 
 /** True when the question's games are one-per-team (plain practice). */

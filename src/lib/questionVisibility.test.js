@@ -4,9 +4,10 @@
  * Run with:  node src/lib/questionVisibility.test.js
  *
  * question_data IS the /game/init body, so this endpoint is a second route to
- * the board the game service withholds until startsAt. These pin that it hides
- * the same things, and that it does not break the screens that legitimately
- * need a board (practice) or a started match.
+ * the board the game service publishes when the pre-match agent-kind window
+ * opens (startsAt - agent_selection_time_limit) and withholds before that.
+ * These pin that it holds the same line, and that it does not break the screens
+ * that legitimately need a board (practice) or an open match.
  */
 
 const assert = require("assert");
@@ -36,8 +37,9 @@ const row = (data, extra = {}) => ({
 const dataOf = (result) => JSON.parse(result.question_data);
 
 const tests = {
-  "before startsAt the board is gone but the schedule stays"() {
-    const out = dataOf(redactQuestionForTeam(row(BOARD), 1_699_999_999));
+  "before the pre-match window the board is gone but the schedule stays"() {
+    // startsAt - 45 s is when it would be published; a second earlier is not.
+    const out = dataOf(redactQuestionForTeam(row(BOARD), 1_699_999_954));
     assert.deepStrictEqual(Object.keys(out).sort(), [
       "agent_selection_time_limit",
       "board_withheld",
@@ -65,10 +67,20 @@ const tests = {
     }
   },
 
-  "at startsAt the board is published"() {
+  "the board is published when the pre-match window opens, and stays"() {
     const input = row(BOARD);
+    const opensAt = BOARD.startsAt - BOARD.agent_selection_time_limit;
+    assert.strictEqual(redactQuestionForTeam(input, opensAt), input);
     assert.strictEqual(redactQuestionForTeam(input, BOARD.startsAt), input);
     assert.strictEqual(redactQuestionForTeam(input, 1_700_000_001), input);
+  },
+
+  "a question with no window publishes at startsAt itself"() {
+    const noWindow = { ...BOARD };
+    delete noWindow.agent_selection_time_limit;
+    const input = row(noWindow);
+    assert.notStrictEqual(redactQuestionForTeam(input, BOARD.startsAt - 1), input);
+    assert.strictEqual(redactQuestionForTeam(input, BOARD.startsAt), input);
   },
 
   "practice questions are never redacted (self-paced, startsAt is moot)"() {
