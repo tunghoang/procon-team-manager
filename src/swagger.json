@@ -3,6 +3,7 @@
   "info": {
     "title": "Procon"
   },
+  "basePath": "/api",
   "paths": {
     "/question": {
       "get": {
@@ -57,6 +58,111 @@
           },
           "405": {
             "description": "Not allowed"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/question/bulk-create": {
+      "post": {
+        "summary": "Create several questions in one request (ADMIN ONLY)",
+        "description": "ALL-OR-NOTHING: the first failure rolls back every question row AND deletes every engine game the request had already created, so either all of them exist or none do. Entries come in two interchangeable shapes. FLAT -- paste a /game/init board straight into the entry and just add `name`. NESTED -- put the board under `raw_questions`, exactly the single-create body. Question fields given at the top level (or in `defaults`) apply to every entry; per-entry values win. Any `game_id` inside a board is ignored: the question's own id becomes the engine game id. Max 50 entries per request.",
+        "tags": ["Question"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["questions"],
+              "properties": {
+                "match_id": {
+                  "type": "integer",
+                  "description": "Default match for every entry; an entry may override it."
+                },
+                "defaults": {
+                  "type": "object",
+                  "description": "Question fields merged into every entry. May also carry a shared `raw_questions` when several questions reuse one board."
+                },
+                "questions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "items": {
+                    "$ref": "#/definitions/BulkQuestionEntry"
+                  }
+                }
+              },
+              "default": {
+                "match_id": 1,
+                "questions": [
+                  {
+                    "name": "Round 1",
+                    "startsAt": 1785204000,
+                    "daySeconds": [45, 45, 45, 45],
+                    "daySteps": [55, 110, 87, 61],
+                    "map": { "height": 20, "width": 20, "cells": [] },
+                    "spots": [{ "brand": 4, "pos": 241, "stocks": 4 }],
+                    "fuelLimits": 118,
+                    "players": 2,
+                    "busyThreshold": 3,
+                    "jammedThreshold": 8,
+                    "teams": [{ "team_id": 1, "agents": [79, 212, 47, 324] }],
+                    "agent_selection_time_limit": 45
+                  },
+                  {
+                    "name": "Round 2",
+                    "raw_questions": {}
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Every question was created",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "created_count": {
+                  "type": "integer"
+                },
+                "questions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Question"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pre-flight rejection, naming the entry: empty/oversized list, missing name, no board, or a duplicated name (within the batch or against a stored question). Nothing was created.",
+            "schema": {
+              "$ref": "#/definitions/BulkCreateError"
+            }
+          },
+          "406": {
+            "description": "An entry has no match_id. Nothing was created.",
+            "schema": {
+              "$ref": "#/definitions/BulkCreateError"
+            }
+          },
+          "422": {
+            "description": "The game service rejected a board (its own status is forwarded, not masked as 500). Everything was rolled back.",
+            "schema": {
+              "$ref": "#/definitions/BulkCreateError"
+            }
+          },
+          "405": {
+            "description": "Not allowed (admin required)"
           },
           "500": {
             "description": "Server error"
@@ -209,6 +315,19 @@
   },
 
   "consumes": ["application/json"],
+  "securityDefinitions": {
+    "token": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "The RAW JWT from the team-manager login -- do NOT prefix it with 'Bearer'. middleware/authenticate.js reads the Authorization header verbatim and hands it straight to jwt.verify, so a 'Bearer ' prefix fails to parse. (The HEXUDON game service is the opposite and does want 'Bearer '.)"
+    }
+  },
+  "security": [
+    {
+      "token": []
+    }
+  ],
   "definitions": {
     "Team": {
       "required": ["name", "account"],
@@ -268,6 +387,53 @@
               "$ref": "#/definitions/Match"
             }
           }
+        }
+      }
+    },
+    "BulkQuestionEntry": {
+      "type": "object",
+      "required": ["name"],
+      "description": "One question. Either put the /game/init board under `raw_questions`, or -- the flat form -- spread its fields (startsAt, daySeconds, daySteps, map, spots, fuelLimits, players, busyThreshold, jammedThreshold, teams, agent_selection_time_limit) directly here alongside `name`. Any key that is not one of the question's own columns is treated as board data, so `name` can never leak into the stored board.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique within the match."
+        },
+        "description": {
+          "type": "string"
+        },
+        "match_id": {
+          "type": "integer",
+          "description": "Overrides the request-level default."
+        },
+        "raw_questions": {
+          "type": "object",
+          "description": "The full /game/init body. Omit when using the flat form."
+        }
+      },
+      "additionalProperties": true
+    },
+    "BulkCreateError": {
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "The reason. For a board rejection this is the game service's own error body verbatim."
+        },
+        "failed_index": {
+          "type": "integer",
+          "description": "Index in `questions` of the entry that failed; null when the request failed before the create loop."
+        },
+        "failed_name": {
+          "type": "string",
+          "description": "That entry's name."
+        },
+        "created_count": {
+          "type": "integer",
+          "description": "Always 0 -- the batch is all-or-nothing."
+        },
+        "rolled_back_games": {
+          "type": "integer",
+          "description": "How many engine games had already been created and were deleted again."
         }
       }
     },
