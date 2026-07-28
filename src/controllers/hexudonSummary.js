@@ -32,36 +32,33 @@ const isPerTeamPractice = (question) => {
   }
 };
 
-const fetchRoundSummary = async (roundId) => {
-  const round = await Round.findByPk(roundId, {
-    include: [
-      {
-        model: Match,
-        as: "matches",
-        include: [
-          { model: Question, as: "questions" },
-          { model: Team, as: "teams", attributes: ["id", "name"], through: { attributes: [] } },
-        ],
-      },
-    ],
-  });
-  if (!round) return null;
+const SCORING_NOTE =
+  "sum of finishing positions (1st = 1); lowest total wins; a rostered " +
+  "team that did not compete takes that match's last position";
 
-  const teamsById = new Map();
-  const matchesToScore = [];
-  for (const match of round.matches || []) {
-    for (const team of match.teams || []) {
-      teamsById.set(String(team.id), { id: team.id, name: team.name });
-    }
-    for (const question of match.questions || []) {
-      matchesToScore.push({ match, question });
-    }
-  }
+const MATCH_INCLUDE = [
+  { model: Question, as: "questions" },
+  {
+    model: Team,
+    as: "teams",
+    attributes: ["id", "name"],
+    through: { attributes: [] },
+  },
+];
 
+/**
+ * Ask the engine for every listed question's result.
+ *
+ * Shared by the round and the per-match views so both score off exactly the
+ * same data with the same rules. One unreachable or never-initialised game must
+ * not sink the whole view: it is reported under `skipped` and the rest is
+ * ranked regardless.
+ */
+const scoreQuestions = async (pairs) => {
   const authHeader = { Authorization: `Bearer ${serviceAdminToken()}` };
   const scored = [];
   const skipped = [];
-  for (const { match, question } of matchesToScore) {
+  for (const { match, question } of pairs) {
     if (isPerTeamPractice(question)) {
       skipped.push({
         question_id: question.id,
@@ -84,11 +81,13 @@ const fetchRoundSummary = async (roundId) => {
         question_name: question.name,
         match_id: match.id,
         match_name: match.name,
+        // Passed through untouched for whoever weights the questions by hand;
+        // nothing here applies them.
+        difficulty: question.difficulty ?? null,
+        weight: question.weight ?? null,
         result,
       });
     } catch (error) {
-      // One unreachable/never-initialised game must not sink the whole round:
-      // report it and rank what is available.
       skipped.push({
         question_id: question.id,
         question_name: question.name,
@@ -100,14 +99,74 @@ const fetchRoundSummary = async (roundId) => {
       });
     }
   }
+  return { scored, skipped };
+};
 
-  const summary = buildRoundSummary(scored, [...teamsById.values()]);
+const rosterOf = (matches) => {
+  const teamsById = new Map();
+  for (const match of matches) {
+    for (const team of match.teams || []) {
+      teamsById.set(String(team.id), { id: team.id, name: team.name });
+    }
+  }
+  return [...teamsById.values()];
+};
+
+const fetchRoundSummary = async (roundId) => {
+  const round = await Round.findByPk(roundId, {
+    include: [{ model: Match, as: "matches", include: MATCH_INCLUDE }],
+  });
+  if (!round) return null;
+
+  const pairs = [];
+  for (const match of round.matches || []) {
+    for (const question of match.questions || []) {
+      pairs.push({ match, question });
+    }
+  }
+
+  const { scored, skipped } = await scoreQuestions(pairs);
+  const summary = buildRoundSummary(scored, rosterOf(round.matches || []));
   return {
     round: { id: round.id, name: round.name },
-    scoring:
-      "sum of finishing positions (1st = 1); lowest total wins; a rostered " +
-      "team that did not compete takes that match's last position",
+    scoring: SCORING_NOTE,
     matches: summary.matches,
+    teams: summary.teams,
+    skipped,
+  };
+};
+
+/**
+ * The same standings scoped to ONE match: every question that match owns,
+ * aggregated per team.
+ *
+ * A match can hold several questions (that is what bulk-create produces), so
+ * this is a real aggregation, not a single scoreboard -- a team's total is the
+ * sum of its positions across that match's questions. Identical rules to the
+ * round view; it is literally the same scorer over a narrower set of questions.
+ */
+const fetchMatchSummary = async (matchId) => {
+  const match = await Match.findByPk(matchId, { include: MATCH_INCLUDE });
+  if (!match) return null;
+
+  const pairs = (match.questions || []).map((question) => ({
+    match,
+    question,
+  }));
+  const { scored, skipped } = await scoreQuestions(pairs);
+  const summary = buildRoundSummary(scored, rosterOf([match]));
+  return {
+    match: {
+      id: match.id,
+      name: match.name,
+      round_id: match.round_id,
+      is_practice: !!match.is_practice,
+      questions: (match.questions || []).length,
+    },
+    scoring: SCORING_NOTE,
+    // Named `questions` here rather than `matches`: within one match these ARE
+    // the questions. Same row shape as the round view's `matches`.
+    questions: summary.matches,
     teams: summary.teams,
     skipped,
   };
@@ -117,6 +176,16 @@ const getRoundHexudonSummary = async (req, res) => {
   try {
     const summary = await fetchRoundSummary(req.params.id);
     if (!summary) return res.status(404).json({ message: "Round not found" });
+    return res.status(200).json(summary);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const getMatchHexudonSummary = async (req, res) => {
+  try {
+    const summary = await fetchMatchSummary(req.params.id);
+    if (!summary) return res.status(404).json({ message: "Match not found" });
     return res.status(200).json(summary);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -223,6 +292,8 @@ const exportRoundHexudonSummary = async (req, res) => {
 
 module.exports = {
   fetchRoundSummary,
+  fetchMatchSummary,
   getRoundHexudonSummary,
+  getMatchHexudonSummary,
   exportRoundHexudonSummary,
 };

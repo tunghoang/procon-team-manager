@@ -157,6 +157,11 @@ const ADDED_COLUMNS = [
   "ALTER TABLE `question` ADD COLUMN `auto_reset_at_sec` BIGINT NULL",
   // Short-lived DATETIME version of the column above; dropped where it exists.
   "ALTER TABLE `question` DROP COLUMN `auto_reset_at`",
+  // Organiser-recorded labels for weighting questions BY HAND: the tier the
+  // board was generated at, and a coefficient. Both NULL on existing rows and
+  // read by no scoring code -- the summaries pass them through untouched.
+  "ALTER TABLE `question` ADD COLUMN `difficulty` VARCHAR(32) NULL",
+  "ALTER TABLE `question` ADD COLUMN `weight` FLOAT NULL",
 ];
 
 const migrated = sequelize.sync().then(async () => {

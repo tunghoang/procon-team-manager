@@ -46,6 +46,22 @@ Question.init(
       type: DataTypes.INTEGER,
       defaultValue: 0,
     },
+    // Difficulty tier this board was generated at ("easy" | "medium" | "hard" |
+    // "very_hard"). Purely a LABEL the organiser records -- the engine's
+    // /game/generate takes a difficulty as INPUT but does not echo it, so
+    // nothing captured it before. No scoring code reads this: the standings
+    // apply no coefficient, weighting is done by hand outside the system.
+    difficulty: {
+      type: DataTypes.STRING(32),
+      allowNull: true,
+    },
+    // A coefficient the organiser sets by hand, for weighting outside the
+    // system. Stored and reported back (see the match/round summaries) but
+    // never applied to any total here.
+    weight: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
     // Auto-reset cron: every N minutes the question's game(s) are wiped back to
     // the agent-selection stage so the same board can be played again (see
     // lib/autoReset.js). 0 = off.

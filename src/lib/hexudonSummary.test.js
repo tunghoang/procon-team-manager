@@ -249,6 +249,7 @@ const tests = {
     assert.strictEqual(summary.teams.length, 3);
     assert.ok(summary.teams.every((t) => t.rank === null));
   },
+
 };
 
 let failed = 0;

@@ -507,6 +507,11 @@ const QUESTION_FIELDS = [
   "end_time",
   "auto_reset_minutes",
   "auto_reset_at_sec",
+  // Organiser labels for weighting by hand. Listed here so the FLAT bulk form
+  // treats them as the question's own fields rather than as board data -- the
+  // engine never sees them.
+  "difficulty",
+  "weight",
 ];
 
 const pickQuestionFields = (obj) =>
