@@ -4,6 +4,7 @@ const XLSX = require("xlsx");
 const { Match, Question, Round, Team } = require("../models");
 const { getServiceApi, serviceAdminToken } = require("../lib/common");
 const { buildRoundSummary } = require("../lib/hexudonSummary");
+const { managerGroupId, canManageMatch } = require("../lib/scope");
 
 /**
  * Round standings for HEXUDON: rank every match, then add the ranks up
@@ -15,8 +16,9 @@ const { buildRoundSummary } = require("../lib/hexudonSummary");
  * and the older /answer/summary + /answer/export views have nothing to show.
  * These endpoints read /game/result per question instead.
  *
- * ADMIN ONLY (mounted behind requireAdmin): a full cross-match leaderboard
- * exposes every team's standing in matches they are not part of.
+ * STAFF ONLY (mounted behind requireStaff): a full cross-match leaderboard
+ * exposes every team's standing in matches they are not part of. A group
+ * manager gets the same views narrowed to its own group's matches.
  */
 
 /** Practice matches run one game PER TEAM (`${questionId}:${teamId}`), so a
@@ -112,23 +114,31 @@ const rosterOf = (matches) => {
   return [...teamsById.values()];
 };
 
-const fetchRoundSummary = async (roundId) => {
+/**
+ * @param groupId  when set, only that group's matches in the round are scored
+ *                 (a manager's view); null scores the whole round.
+ */
+const fetchRoundSummary = async (roundId, groupId = null) => {
   const round = await Round.findByPk(roundId, {
     include: [{ model: Match, as: "matches", include: MATCH_INCLUDE }],
   });
   if (!round) return null;
+  const matches = (round.matches || []).filter(
+    (m) => groupId == null || Number(m.group_id) === Number(groupId),
+  );
 
   const pairs = [];
-  for (const match of round.matches || []) {
+  for (const match of matches) {
     for (const question of match.questions || []) {
       pairs.push({ match, question });
     }
   }
 
   const { scored, skipped } = await scoreQuestions(pairs);
-  const summary = buildRoundSummary(scored, rosterOf(round.matches || []));
+  const summary = buildRoundSummary(scored, rosterOf(matches));
   return {
     round: { id: round.id, name: round.name },
+    group_id: groupId,
     scoring: SCORING_NOTE,
     matches: summary.matches,
     teams: summary.teams,
@@ -174,7 +184,10 @@ const fetchMatchSummary = async (matchId) => {
 
 const getRoundHexudonSummary = async (req, res) => {
   try {
-    const summary = await fetchRoundSummary(req.params.id);
+    const summary = await fetchRoundSummary(
+      req.params.id,
+      managerGroupId(req.auth),
+    );
     if (!summary) return res.status(404).json({ message: "Round not found" });
     return res.status(200).json(summary);
   } catch (error) {
@@ -184,6 +197,12 @@ const getRoundHexudonSummary = async (req, res) => {
 
 const getMatchHexudonSummary = async (req, res) => {
   try {
+    const match = await Match.findByPk(req.params.id, {
+      attributes: ["id", "group_id"],
+    });
+    if (!match || !canManageMatch(req.auth, match)) {
+      return res.status(404).json({ message: "Match not found" });
+    }
     const summary = await fetchMatchSummary(req.params.id);
     if (!summary) return res.status(404).json({ message: "Match not found" });
     return res.status(200).json(summary);
@@ -194,7 +213,10 @@ const getMatchHexudonSummary = async (req, res) => {
 
 const exportRoundHexudonSummary = async (req, res) => {
   try {
-    const summary = await fetchRoundSummary(req.params.id);
+    const summary = await fetchRoundSummary(
+      req.params.id,
+      managerGroupId(req.auth),
+    );
     if (!summary) return res.status(404).json({ message: "Round not found" });
 
     const wb = XLSX.utils.book_new();

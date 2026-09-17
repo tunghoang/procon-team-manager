@@ -42,6 +42,13 @@ Match.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // Owning group (models/group.js) when a group manager set the match up.
+    // Such a match is visible to that group and the superadmin only, and only
+    // that group's members can be rostered on it. NULL = an organiser match.
+    group_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   },
   {
     sequelize,

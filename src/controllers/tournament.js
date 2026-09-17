@@ -1,10 +1,12 @@
 const { Tournament, Round, Match, Team } = require("../models");
 const useController = require("../lib/useController");
+const { isStaff } = require("../lib/scope");
 const { Sequelize } = require('sequelize');
 const { getAll, get, update, create, remove } = useController(Tournament);
 
 const getTournaments = async (req, res) => {
-  if (req.auth.is_admin) return getAll(req, res);
+  // Staff (superadmin or group manager) browse every tournament; see getRounds.
+  if (isStaff(req.auth)) return getAll(req, res);
 
   try {
     const teamId = req.auth.id;

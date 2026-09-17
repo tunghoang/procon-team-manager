@@ -5,4 +5,5 @@ module.exports = {
   "/match": require("./match"),
   "/question": require("./question"),
   "/answer": require("./answer"),
+  "/group": require("./group"),
 };

@@ -2,6 +2,7 @@ const Round = require("../models/round");
 const { Match, Team } = require("../models");
 const { Sequelize } = require('sequelize');
 const useController = require("../lib/useController");
+const { isStaff } = require("../lib/scope");
 const { getAll, get, update, create, remove } = useController(Round);
 
 const filterField = {
@@ -31,7 +32,9 @@ const include = [
 ];
 
 const getRounds = async (req, res) => {
-  if (req.auth.is_admin) {
+  // Superadmin and group managers see every round: a manager picks the round
+  // its group's matches go under (rounds themselves stay read-only for it).
+  if (isStaff(req.auth)) {
     return await getAll(req, res, null, null, filterField);
   }
 

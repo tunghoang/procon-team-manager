@@ -6,6 +6,30 @@ const Question = require("./question");
 const Answer = require("./answer");
 const Round = require("./round");
 const OptimalAnswer = require("./optimal_answer");
+const Group = require("./group");
+
+// Groups (schools). Deleting a group orphans its accounts and matches back to
+// "no group" rather than deleting them -- the accounts are real teams.
+Group.hasMany(Team, {
+  as: "members",
+  foreignKey: { name: "group_id", allowNull: true },
+  onDelete: "SET NULL",
+});
+Team.belongsTo(Group, {
+  as: "group",
+  foreignKey: { name: "group_id", allowNull: true },
+  onDelete: "SET NULL",
+});
+Group.hasMany(Match, {
+  as: "matches",
+  foreignKey: { name: "group_id", allowNull: true },
+  onDelete: "SET NULL",
+});
+Match.belongsTo(Group, {
+  as: "group",
+  foreignKey: { name: "group_id", allowNull: true },
+  onDelete: "SET NULL",
+});
 
 Tournament.hasMany(Round, {
   as: "rounds",
@@ -162,6 +186,13 @@ const ADDED_COLUMNS = [
   // read by no scoring code -- the summaries pass them through untouched.
   "ALTER TABLE `question` ADD COLUMN `difficulty` VARCHAR(32) NULL",
   "ALTER TABLE `question` ADD COLUMN `weight` FLOAT NULL",
+  // Groups (schools) and per-group managers. sync() creates `team_group` on
+  // its own; the columns on the existing tables are added here. Plain columns,
+  // no FK constraint: the ORM associations above carry the relation, and an
+  // ALTER adding a constraint could fail on an unrelated existing row.
+  "ALTER TABLE `team` ADD COLUMN `group_id` INT NULL",
+  "ALTER TABLE `team` ADD COLUMN `group_role` VARCHAR(16) NOT NULL DEFAULT 'member'",
+  "ALTER TABLE `match` ADD COLUMN `group_id` INT NULL",
 ];
 
 const migrated = sequelize.sync().then(async () => {
@@ -188,4 +219,5 @@ module.exports = {
   Question,
   Answer,
   OptimalAnswer,
+  Group,
 };

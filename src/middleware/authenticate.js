@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { Team } = require("../models");
+const { isStaff } = require("../lib/scope");
 const privateKey = process.env.JWT_SECRET_KEY || "secretKey";
 const skipList = [
   "/skip-route",
@@ -36,6 +37,7 @@ const authenticate = (req, res, next) => {
   }
 };
 
+// Superadmin only (lib/scope.js: isSuperAdmin).
 const requireAdmin = async (req, res, next) => {
   if (!req.auth.is_admin) {
     return res.status(405).json({ message: "Required admin" });
@@ -43,4 +45,13 @@ const requireAdmin = async (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, requireAdmin };
+// Superadmin OR a group manager. Routes behind this guard must still scope
+// what a manager may touch (lib/scope.js) -- the guard only opens the door.
+const requireStaff = async (req, res, next) => {
+  if (!isStaff(req.auth)) {
+    return res.status(405).json({ message: "Required admin or group manager" });
+  }
+  next();
+};
+
+module.exports = { authenticate, requireAdmin, requireStaff };

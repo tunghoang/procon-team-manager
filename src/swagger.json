@@ -8,7 +8,9 @@
     "/question": {
       "get": {
         "summary": "Get all questions",
-        "tags": ["Question"],
+        "tags": [
+          "Question"
+        ],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -45,7 +47,9 @@
             "type": "integer"
           }
         ],
-        "tags": ["Question"],
+        "tags": [
+          "Question"
+        ],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -69,7 +73,9 @@
       "post": {
         "summary": "Create several questions in one request (ADMIN ONLY)",
         "description": "ALL-OR-NOTHING: the first failure rolls back every question row AND deletes every engine game the request had already created, so either all of them exist or none do. Entries come in two interchangeable shapes. FLAT -- paste a /game/init board straight into the entry and just add `name`. NESTED -- put the board under `raw_questions`, exactly the single-create body. Question fields given at the top level (or in `defaults`) apply to every entry; per-entry values win. Any `game_id` inside a board is ignored: the question's own id becomes the engine game id. Max 50 entries per request.",
-        "tags": ["Question"],
+        "tags": [
+          "Question"
+        ],
         "parameters": [
           {
             "in": "body",
@@ -77,7 +83,9 @@
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["questions"],
+              "required": [
+                "questions"
+              ],
               "properties": {
                 "match_id": {
                   "type": "integer",
@@ -102,15 +110,45 @@
                   {
                     "name": "Round 1",
                     "startsAt": 1785204000,
-                    "daySeconds": [45, 45, 45, 45],
-                    "daySteps": [55, 110, 87, 61],
-                    "map": { "height": 20, "width": 20, "cells": [] },
-                    "spots": [{ "brand": 4, "pos": 241, "stocks": 4 }],
+                    "daySeconds": [
+                      45,
+                      45,
+                      45,
+                      45
+                    ],
+                    "daySteps": [
+                      55,
+                      110,
+                      87,
+                      61
+                    ],
+                    "map": {
+                      "height": 20,
+                      "width": 20,
+                      "cells": []
+                    },
+                    "spots": [
+                      {
+                        "brand": 4,
+                        "pos": 241,
+                        "stocks": 4
+                      }
+                    ],
                     "fuelLimits": 118,
                     "players": 2,
                     "busyThreshold": 3,
                     "jammedThreshold": 8,
-                    "teams": [{ "team_id": 1, "agents": [79, 212, 47, 324] }],
+                    "teams": [
+                      {
+                        "team_id": 1,
+                        "agents": [
+                          79,
+                          212,
+                          47,
+                          324
+                        ]
+                      }
+                    ],
                     "agent_selection_time_limit": 45
                   },
                   {
@@ -173,7 +211,9 @@
     "/answer": {
       "get": {
         "summary": "Get all answers",
-        "tags": ["Answer"],
+        "tags": [
+          "Answer"
+        ],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -192,7 +232,6 @@
               }
             }
           },
-
           "500": {
             "description": "Server error"
           }
@@ -227,7 +266,9 @@
             }
           }
         ],
-        "tags": ["Answer"],
+        "tags": [
+          "Answer"
+        ],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -264,7 +305,9 @@
             "type": "integer"
           }
         ],
-        "tags": ["Answer"],
+        "tags": [
+          "Answer"
+        ],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -287,7 +330,9 @@
     "/team": {
       "get": {
         "summary": "Get your team",
-        "tags": ["Team"],
+        "tags": [
+          "Team"
+        ],
         "responses": {
           "200": {
             "description": "Successfully",
@@ -311,10 +356,368 @@
           }
         }
       }
+    },
+    "/group": {
+      "get": {
+        "summary": "List groups (schools)",
+        "tags": [
+          "Group"
+        ],
+        "description": "Superadmin: every group. Group manager: its own group only. Each row carries member_count, match_count and managers. Roles: superadmin (is_admin) is unscoped; a GROUP MANAGER (group_role=manager + group_id, a dedicated non-playing account) is confined to its own group; a team sees only what it is rostered on.",
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Group"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Not staff (superadmin or group manager)"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a group (SUPERADMIN)",
+        "tags": [
+          "Group"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or duplicated name"
+          },
+          "405": {
+            "description": "Not superadmin"
+          }
+        }
+      }
+    },
+    "/group/{id}": {
+      "get": {
+        "summary": "Get one group (staff of that group)",
+        "tags": [
+          "Group"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Group id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "$ref": "#/definitions/Group"
+            }
+          },
+          "404": {
+            "description": "Not found / not your group"
+          }
+        }
+      },
+      "put": {
+        "summary": "Rename a group (SUPERADMIN)",
+        "tags": [
+          "Group"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Group id"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          },
+          "400": {
+            "description": "Duplicated name"
+          },
+          "405": {
+            "description": "Not superadmin"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a group (SUPERADMIN)",
+        "tags": [
+          "Group"
+        ],
+        "description": "The group's accounts and matches are kept and dropped back to 'no group' (group_id NULL, group_role member).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Group id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "405": {
+            "description": "Not superadmin"
+          }
+        }
+      }
+    },
+    "/group/{id}/members": {
+      "get": {
+        "summary": "Accounts in the group",
+        "tags": [
+          "Group"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Group id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/GroupMember"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Not staff (superadmin or group manager)"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add accounts to the group",
+        "tags": [
+          "Group"
+        ],
+        "description": "All-or-nothing. A group manager may add only UNGROUPED, non-admin accounts to its own group; the superadmin may move any account. Added accounts become plain members (the manager role is set via PUT /team/{id}).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Group id"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "team_ids"
+              ],
+              "properties": {
+                "team_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Added",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "group_id": {
+                  "type": "integer"
+                },
+                "added_count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No team_ids / a superadmin account"
+          },
+          "403": {
+            "description": "Account already in another group, or not yours to add"
+          },
+          "404": {
+            "description": "Group or team not found"
+          }
+        }
+      }
+    },
+    "/group/{id}/candidates": {
+      "get": {
+        "summary": "Accounts that could be added to the group",
+        "tags": [
+          "Group"
+        ],
+        "description": "Group manager: the ungrouped, non-admin accounts. Superadmin: every account outside this group (group_id shows where it currently is).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Group id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/GroupCandidate"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Not staff (superadmin or group manager)"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/group/{id}/members/{teamId}": {
+      "delete": {
+        "summary": "Remove an account from the group",
+        "tags": [
+          "Group"
+        ],
+        "description": "Back to 'no group'. A manager may remove its own members but never itself.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Group id"
+          },
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed"
+          },
+          "403": {
+            "description": "A manager removing itself"
+          },
+          "404": {
+            "description": "Team is not in this group"
+          }
+        }
+      }
     }
   },
-
-  "consumes": ["application/json"],
+  "consumes": [
+    "application/json"
+  ],
   "securityDefinitions": {
     "token": {
       "type": "apiKey",
@@ -330,7 +733,10 @@
   ],
   "definitions": {
     "Team": {
-      "required": ["name", "account"],
+      "required": [
+        "name",
+        "account"
+      ],
       "properties": {
         "id": {
           "type": "integer"
@@ -340,11 +746,26 @@
         },
         "account": {
           "type": "string"
+        },
+        "group_id": {
+          "type": "integer",
+          "x-nullable": true,
+          "description": "Group (school) the account belongs to; null = none"
+        },
+        "group_role": {
+          "type": "string",
+          "enum": [
+            "member",
+            "manager"
+          ],
+          "description": "manager = runs its group's matches (scoped admin)"
         }
       }
     },
     "Match": {
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
         "id": {
           "type": "integer"
@@ -366,7 +787,9 @@
       }
     },
     "Question": {
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
         "id": {
           "type": "integer"
@@ -392,7 +815,9 @@
     },
     "BulkQuestionEntry": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "description": "One question. Either put the /game/init board under `raw_questions`, or -- the flat form -- spread its fields (startsAt, daySeconds, daySteps, map, spots, fuelLimits, players, busyThreshold, jammedThreshold, teams, agent_selection_time_limit) directly here alongside `name`. Any key that is not one of the question's own columns is treated as board data, so `name` can never leak into the stored board.",
       "properties": {
         "name": {
@@ -438,7 +863,9 @@
       }
     },
     "Answer": {
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
         "id": {
           "type": "integer"
@@ -457,6 +884,83 @@
         },
         "question_id": {
           "type": "integer"
+        }
+      }
+    },
+    "Group": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "member_count": {
+          "type": "integer"
+        },
+        "match_count": {
+          "type": "integer"
+        },
+        "managers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "GroupMember": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "account": {
+          "type": "string"
+        },
+        "group_role": {
+          "type": "string",
+          "enum": [
+            "member",
+            "manager"
+          ]
+        },
+        "is_admin": {
+          "type": "boolean"
+        }
+      }
+    },
+    "GroupCandidate": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "account": {
+          "type": "string"
+        },
+        "group_id": {
+          "type": "integer",
+          "x-nullable": true,
+          "description": "null = ungrouped"
         }
       }
     }

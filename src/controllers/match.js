@@ -1,9 +1,16 @@
 const got = require("got");
 const Match = require("../models/match");
 const useController = require("../lib/useController");
-const { Team, Tournament, Question } = require("../models");
+const { Team, Tournament, Question, Group } = require("../models");
 const Round = require("../models/round");
 const { getServiceApi, serviceAdminToken } = require("../lib/common");
+const {
+  isSuperAdmin,
+  isManager,
+  managerGroupId,
+  canManageMatch,
+  teamFitsMatch,
+} = require("../lib/scope");
 const { getAll, update, create, remove } = useController(Match);
 
 // Registers `team` on every already-created HEXUDON game for this match,
@@ -86,6 +93,11 @@ const include = [
   {
     model: Team,
     as: "teams",
+    attributes: ["id", "name", "group_id"],
+  },
+  {
+    model: Group,
+    as: "group",
     attributes: ["id", "name"],
   },
   {
@@ -117,6 +129,10 @@ const filterField = {
     field: "round_id",
     op: "eq",
   },
+  eq_group_id: {
+    field: "group_id",
+    op: "eq",
+  },
   teams: {
     eq_id: {
       field: "$teams.id$",
@@ -126,7 +142,10 @@ const filterField = {
 };
 
 const getMatches = async (req, res) => {
-  if (!req.auth.is_admin) {
+  if (isManager(req.auth)) {
+    // A group manager sees its own group's matches, active or not.
+    req.query = { ...req.query, eq_group_id: managerGroupId(req.auth) };
+  } else if (!isSuperAdmin(req.auth)) {
     req.query = {
       ...req.query,
       teams: {
@@ -144,7 +163,9 @@ const getMatchByName = async (req, res) => {
     const where = {
       name: req.params.name,
     };
-    if (!req.auth.is_admin) {
+    if (isManager(req.auth)) {
+      where.group_id = managerGroupId(req.auth);
+    } else if (!isSuperAdmin(req.auth)) {
       where.is_active = true;
     }
     const match = await Match.findOne({ where });
@@ -164,7 +185,10 @@ const getMatch = async (req, res) => {
     const where = {
       id: req.params.id,
     };
-    if (!req.auth.is_admin) {
+    if (isManager(req.auth)) {
+      // Another group's match reads as "not found", never as "forbidden".
+      where.group_id = managerGroupId(req.auth);
+    } else if (!isSuperAdmin(req.auth)) {
       where.is_active = true;
     }
     const match = await Match.findOne({
@@ -178,7 +202,7 @@ const getMatch = async (req, res) => {
     }
 
     const team = match.teams.find((team) => team.id === req.auth.id);
-    if (!team && !req.auth.is_admin)
+    if (!team && !canManageMatch(req.auth, match))
       return res.status(405).json({
         message: "Not allowed",
       });
@@ -189,8 +213,21 @@ const getMatch = async (req, res) => {
   }
 };
 
+// A group match's roster must stay inside the group (scope.teamFitsMatch).
+const outsiders = (teams, match) =>
+  (teams || []).filter((team) => !teamFitsMatch(team, match));
+
 const createMatch = async (req, res) => {
   try {
+    if (isManager(req.auth)) {
+      // A manager's match always belongs to its own group -- whatever the
+      // body says. It may pick any round (rounds are read-only for it).
+      req.body.group_id = managerGroupId(req.auth);
+    } else if (req.body.group_id === "" || req.body.group_id == null) {
+      req.body.group_id = null;
+    } else {
+      req.body.group_id = Number(req.body.group_id);
+    }
     const match = await Match.findOne({
       where: { name: req.body.name, round_id: req.body.round_id },
     });
@@ -202,11 +239,49 @@ const createMatch = async (req, res) => {
 };
 
 const updateMatch = async (req, res) => {
-  await update(req, res);
+  try {
+    const match = await Match.findByPk(req.params.id, {
+      include: [{ model: Team, as: "teams", attributes: ["id", "name", "group_id"] }],
+    });
+    if (!match) return res.status(404).json({ message: "Match not found" });
+    if (!canManageMatch(req.auth, match)) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+    if (isManager(req.auth)) {
+      // Ownership is not a manager's to change.
+      delete req.body.group_id;
+    } else if ("group_id" in req.body) {
+      req.body.group_id =
+        req.body.group_id === "" || req.body.group_id == null
+          ? null
+          : Number(req.body.group_id);
+      // Re-homing a match under a group must not strand rostered outsiders.
+      const strangers = outsiders(match.teams, { group_id: req.body.group_id });
+      if (strangers.length) {
+        return res.status(400).json({
+          message: `Rostered team(s) outside that group: ${strangers
+            .map((t) => t.name)
+            .join(", ")}`,
+        });
+      }
+    }
+    await update(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const removeMatch = async (req, res) => {
-  await remove(req, res);
+  try {
+    const match = await Match.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ message: "Match not found" });
+    if (!canManageMatch(req.auth, match)) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+    await remove(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const removeTeamMatch = async (req, res) => {
@@ -217,6 +292,9 @@ const removeTeamMatch = async (req, res) => {
       return res.status(404).json({
         message: `Match not found`,
       });
+    }
+    if (!canManageMatch(req.auth, match)) {
+      return res.status(403).json({ message: "Not allowed" });
     }
     const team = await Team.findByPk(teamId);
     if (!team) {
@@ -243,10 +321,18 @@ const createTeamMatch = async (req, res) => {
         message: `Match not found`,
       });
     }
+    if (!canManageMatch(req.auth, match)) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
     const team = await Team.findByPk(teamId);
     if (!team) {
       return res.status(404).json({
         message: `Team not found`,
+      });
+    }
+    if (!teamFitsMatch(team, match)) {
+      return res.status(400).json({
+        message: `"${team.name}" is not a member of this match's group`,
       });
     }
     await match.addTeams(team);
@@ -298,6 +384,21 @@ const bulkAddTeams = async (req, res) => {
     }
     if (!teams.length) {
       return res.status(404).json({ message: "No teams found" });
+    }
+
+    // Scope the whole batch before touching anything.
+    for (const match of matches) {
+      if (!canManageMatch(req.auth, match)) {
+        return res.status(403).json({ message: `Not allowed: match "${match.name}"` });
+      }
+      const strangers = outsiders(teams, match);
+      if (strangers.length) {
+        return res.status(400).json({
+          message: `Not in the group of match "${match.name}": ${strangers
+            .map((t) => t.name)
+            .join(", ")}`,
+        });
+      }
     }
 
     let addedCount = 0;
@@ -356,6 +457,11 @@ const bulkRemoveTeams = async (req, res) => {
     }
     if (!teams.length) {
       return res.status(404).json({ message: "No teams found" });
+    }
+    for (const match of matches) {
+      if (!canManageMatch(req.auth, match)) {
+        return res.status(403).json({ message: `Not allowed: match "${match.name}"` });
+      }
     }
 
     let removedCount = 0;

@@ -13,7 +13,7 @@ const {
   getTime,
   setQuestionAutoReset,
 } = require("../controllers/question");
-const { requireAdmin } = require("../middleware/authenticate");
+const { requireStaff } = require("../middleware/authenticate");
 
 const router = Router();
 router.route("/time").get(getTime);
@@ -21,7 +21,9 @@ router.route("/time").get(getTime);
 router.route("/").get(getQuestions);
 router.route("/:id").get(getQuestion);
 
-router.all("*", requireAdmin);
+// Staff (superadmin or group manager). A manager may only touch questions in
+// its own group's matches -- enforced per handler in the controller.
+router.all("*", requireStaff);
 
 router.route("/").post(createQuestion);
 router.route("/bulk-create").post(bulkCreateQuestions);

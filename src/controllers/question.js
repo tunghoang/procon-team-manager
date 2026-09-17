@@ -6,10 +6,18 @@ const {
   getFilter,
   getServiceApi,
   resyncAutoIncrement,
+  serviceAdminToken,
 } = require("../lib/common");
+const {
+  isStaff,
+  isManager,
+  managerGroupId,
+  canManageMatch,
+} = require("../lib/scope");
 const {
   MAX_MINUTES,
   MIN_MINUTES,
+  isPerTeamQuestion,
   nextDueSec,
 } = require("../lib/autoResetPlan");
 const { redactQuestionForTeam } = require("../lib/questionVisibility");
@@ -22,6 +30,13 @@ const include = [
     as: "match",
   },
 ];
+
+// Every engine call from here is made as the SERVICE, not with the caller's
+// own token: a group manager's token is not an engine admin (it is only an
+// admin over its own group's games, and only once those carry the group id
+// this controller stamps on them at /game/init). Scope is enforced here, on
+// the match, before any engine call is made.
+const engineAuthHeader = () => `Bearer ${serviceAdminToken()}`;
 
 // Best-effort delete of a game on the HEXUDON engine. Never throws: a game
 // that's already absent (404) or a briefly-unreachable engine must not block
@@ -38,6 +53,25 @@ const deleteGameQuietly = async (gameId, authHeader) => {
       err.response?.statusCode || err.message,
     );
   }
+};
+
+/**
+ * Every engine game a question owns. A plain-practice question runs one solo
+ * game PER ROSTERED TEAM (`${question.id}:${teamId}`); everything else is the
+ * one shared game at the bare id. The bare id is always included: it costs a
+ * harmless 404 and covers a practice question whose roster has since changed.
+ * Must be computed BEFORE the question row is deleted (it reads question_data).
+ */
+const engineGameIdsFor = async (question) => {
+  const ids = [String(question.id)];
+  if (isPerTeamQuestion(question)) {
+    const rows = await sequelize.query(
+      "SELECT team_id FROM team_match WHERE match_id = :matchId",
+      { replacements: { matchId: question.match_id }, type: QueryTypes.SELECT },
+    );
+    for (const row of rows) ids.push(`${question.id}:${row.team_id}`);
+  }
+  return ids;
 };
 
 // Stamp the match's practice flags onto a question's raw_questions body and
@@ -61,6 +95,9 @@ const prepareRawQuestion = (raw, match) => {
     }
     raw.is_practice = isPractice; // so the frontend detects practice from question_data
     raw.no_reset = noReset;
+    // Owning group, if any. The engine stores it on the game so that group's
+    // manager is treated as an admin of it there (reset, delete, spectate).
+    raw.group_id = match?.group_id ?? null;
   }
   return { isPractice, noReset };
 };
@@ -159,21 +196,27 @@ const filterField = {
   },
 };
 const getQuestions = async (req, res) => {
-  const { id: teamId, is_admin: isAdmin } = req.auth;
+  const { id: teamId } = req.auth;
   try {
+    // A group manager: only the questions of its own group's matches, in
+    // full (no pre-start redaction -- it set the board up).
+    const matchInclude = { model: Match, as: "match" };
+    if (isManager(req.auth)) {
+      matchInclude.where = { group_id: managerGroupId(req.auth) };
+    }
     let questions = await Question.findAll({
       where: getFilter(req.query, filterField),
       attributes: {
         exclude: ignore,
       },
-      include,
+      include: [matchInclude],
       order: [
         ["order", "ASC"],
         ["createdAt", "ASC"],
       ],
     });
 
-    if (!isAdmin) {
+    if (!isStaff(req.auth)) {
       questions = (
         await Promise.all(
           questions.map(async (item) => {
@@ -195,7 +238,7 @@ const getQuestions = async (req, res) => {
 };
 
 const getQuestion = async (req, res) => {
-  const { id: teamId, is_admin: isAdmin } = req.auth;
+  const { id: teamId } = req.auth;
   const id = req.params.id;
   try {
     const question = await Question.findByPk(id, {
@@ -211,20 +254,23 @@ const getQuestion = async (req, res) => {
       });
     }
 
+    // Superadmin, or the manager of the owning group: the full row.
+    if (canManageMatch(req.auth, question.match)) {
+      return res.status(200).json(question);
+    }
+
     const team = await sequelize.query(
       `SELECT * FROM team_match where team_id = :teamId and match_id = :matchId`,
       { replacements: { teamId, matchId: question.match_id }, type: QueryTypes.SELECT },
     );
 
-    if (!isAdmin && !team.length) {
+    if (!team.length) {
       return res.status(404).json({
         message: "Question not found",
       });
     }
 
-    return res
-      .status(200)
-      .json(isAdmin ? question : redactQuestionForTeam(question));
+    return res.status(200).json(redactQuestionForTeam(question));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -233,9 +279,12 @@ const getQuestion = async (req, res) => {
 const updateQuestion = async (req, res) => {
   try {
     const { id } = req.params;
-    const question = await Question.findByPk(id);
+    const question = await Question.findByPk(id, { include });
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
+    }
+    if (!canManageMatch(req.auth, question.match)) {
+      return res.status(403).json({ message: "Not allowed" });
     }
 
     // A HEXUDON question's board (map/spots/teams/day config) is fixed at
@@ -268,9 +317,12 @@ const updateQuestion = async (req, res) => {
  */
 const setQuestionAutoReset = async (req, res) => {
   try {
-    const question = await Question.findByPk(req.params.id);
+    const question = await Question.findByPk(req.params.id, { include });
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
+    }
+    if (!canManageMatch(req.auth, question.match)) {
+      return res.status(403).json({ message: "Not allowed" });
     }
     const minutes = Number(req.body.minutes);
     if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_MINUTES) {
@@ -294,6 +346,15 @@ const setQuestionAutoReset = async (req, res) => {
 };
 
 const removeQuestion = async (req, res) => {
+  const existing = await Question.findByPk(req.params.id, { include });
+  if (!existing) {
+    return res.status(404).json({ message: "Question not found" });
+  }
+  if (!canManageMatch(req.auth, existing.match)) {
+    return res.status(403).json({ message: "Not allowed" });
+  }
+  // Resolved up front: the per-team ids come from the row about to go.
+  const gameIds = await engineGameIdsFor(existing);
   const transaction = await sequelize.transaction();
   try {
     const deletedCount = await Question.destroy({
@@ -307,10 +368,11 @@ const removeQuestion = async (req, res) => {
 
     await transaction.commit();
     await resyncAutoIncrement(Question);
-    // Best-effort engine cleanup AFTER the DB delete is committed: the game
+    // Best-effort engine cleanup AFTER the DB delete is committed: a game
     // may already be gone on the engine (404) or the engine briefly
     // unreachable -- neither should make the question undeletable here.
-    await deleteGameQuietly(req.params.id, `Bearer ${req.get("Authorization")}`);
+    const authHeader = engineAuthHeader();
+    await Promise.all(gameIds.map((gameId) => deleteGameQuietly(gameId, authHeader)));
     return res.sendStatus(200);
   } catch (error) {
     await transaction.rollback();
@@ -322,14 +384,25 @@ const removeQuestion = async (req, res) => {
 // Body: { question_ids: number[] }
 const bulkDeleteQuestions = async (req, res) => {
   const { question_ids } = req.body;
+  if (!question_ids?.length) {
+    return res.status(400).json({
+      message: "question_ids is required",
+    });
+  }
+  // Scope the whole batch first: one question outside the caller's reach
+  // rejects the request before anything is deleted.
+  const existing = await Question.findAll({
+    where: { id: question_ids },
+    include,
+  });
+  const barred = existing.find((q) => !canManageMatch(req.auth, q.match));
+  if (barred) {
+    return res.status(403).json({ message: `Not allowed: "${barred.name}"` });
+  }
+  const gameIds = (await Promise.all(existing.map(engineGameIdsFor))).flat();
   const transaction = await sequelize.transaction();
 
   try {
-    if (!question_ids?.length) {
-      return res.status(400).json({
-        message: "question_ids is required",
-      });
-    }
 
     await Answer.destroy({
       where: { question_id: question_ids },
@@ -351,10 +424,8 @@ const bulkDeleteQuestions = async (req, res) => {
     // Best-effort engine cleanup after the DB delete commits, one per game,
     // each swallowing its own error so one missing/failed game never rolls
     // back (and thus un-deletes) the whole batch.
-    const authHeader = `Bearer ${req.get("Authorization")}`;
-    await Promise.all(
-      question_ids.map((question_id) => deleteGameQuietly(question_id, authHeader)),
-    );
+    const authHeader = engineAuthHeader();
+    await Promise.all(gameIds.map((gameId) => deleteGameQuietly(gameId, authHeader)));
 
     return res.status(200).json({
       message: `Successfully deleted ${deletedCount} question(s)`,
@@ -367,13 +438,23 @@ const bulkDeleteQuestions = async (req, res) => {
 };
 
 const createQuestion = async (req, res) => {
+  if (!req.body.match_id) {
+    return res.status(406).json({ message: "match_id invalid" });
+  }
+  // Resolve and scope the match before opening the transaction: a refusal
+  // here must not leave a transaction dangling.
+  const match = await Match.findByPk(req.body.match_id);
+  if (!match) {
+    return res.status(406).json({ message: "match_id invalid" });
+  }
+  if (!canManageMatch(req.auth, match)) {
+    return res.status(403).json({ message: "Not allowed" });
+  }
+
   const transaction = await sequelize.transaction();
   const createdGameIds = [];
 
   try {
-    if (!req.body.match_id) {
-      return res.status(406).json({ message: "match_id invalid" });
-    }
 
     const existingQuestion = await Question.findOne({
       where: { name: req.body.name, match_id: req.body.match_id },
@@ -447,13 +528,12 @@ const createQuestion = async (req, res) => {
     // }
 
     const raw = req.body.raw_questions;
-    const match = await Match.findByPk(req.body.match_id, { transaction });
     const { isPractice, noReset } = prepareRawQuestion(raw, match);
 
     req.body.question_data = JSON.stringify(raw);
     const question = await Question.create(req.body, { transaction });
 
-    const authHeader = `Bearer ${req.get("Authorization")}`;
+    const authHeader = engineAuthHeader();
     await initEngineGames(
       question.id,
       raw,
@@ -477,9 +557,7 @@ const createQuestion = async (req, res) => {
     // per team, so a failure on team 3 would otherwise strand teams 1-2's games
     // and make the admin's next attempt collide with them on game_id.
     await Promise.all(
-      createdGameIds.map((gameId) =>
-        deleteGameQuietly(gameId, `Bearer ${req.get("Authorization")}`),
-      ),
+      createdGameIds.map((gameId) => deleteGameQuietly(gameId, engineAuthHeader())),
     );
     // Surface the game service's own status (e.g. 400 = config validation
     // failed: bad day/steps/fuel/spot bounds) instead of masking it as 500,
@@ -637,6 +715,19 @@ const bulkCreateQuestions = async (req, res) => {
     indexesByMatch.get(q.match_id).push(i);
   });
 
+  // Every referenced match must exist and be within the caller's scope.
+  const matchesById = new Map();
+  for (const matchId of indexesByMatch.keys()) {
+    const match = await Match.findByPk(matchId);
+    if (!match) {
+      return res.status(406).json({ message: `match_id ${matchId} invalid` });
+    }
+    if (!canManageMatch(req.auth, match)) {
+      return res.status(403).json({ message: `Not allowed: match "${match.name}"` });
+    }
+    matchesById.set(matchId, match);
+  }
+
   // ...and against what is already stored, one IN() query per match.
   for (const [matchId, indexes] of indexesByMatch) {
     const clash = await Question.findOne({
@@ -651,7 +742,7 @@ const bulkCreateQuestions = async (req, res) => {
   }
 
   // -- Create -------------------------------------------------------------
-  const authHeader = `Bearer ${req.get("Authorization")}`;
+  const authHeader = engineAuthHeader();
   const transaction = await sequelize.transaction();
   const createdGameIds = [];
   const created = [];
@@ -672,22 +763,14 @@ const bulkCreateQuestions = async (req, res) => {
       nextOrder.set(matchId, (top?.order ?? -1) + 1);
     }
 
-    const matchCache = new Map();
-
     for (let i = 0; i < merged.length; i++) {
       failedIndex = i;
       const q = merged[i];
 
-      if (!matchCache.has(q.match_id)) {
-        matchCache.set(
-          q.match_id,
-          await Match.findByPk(q.match_id, { transaction }),
-        );
-      }
       const raw = q.raw_questions;
       const { isPractice, noReset } = prepareRawQuestion(
         raw,
-        matchCache.get(q.match_id),
+        matchesById.get(q.match_id),
       );
 
       const order = nextOrder.get(q.match_id);

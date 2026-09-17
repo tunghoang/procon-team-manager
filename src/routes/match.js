@@ -12,7 +12,7 @@ const {
   bulkRemoveTeams,
 } = require("../controllers/match");
 const { getMatchHexudonSummary } = require("../controllers/hexudonSummary");
-const { requireAdmin } = require("../middleware/authenticate");
+const { requireStaff } = require("../middleware/authenticate");
 
 const router = Router();
 
@@ -20,10 +20,12 @@ router.route("/").get(getMatches);
 router.route("/:id").get(getMatch);
 router.route("/name/:name").get(getMatchByName);
 
-router.all("*", requireAdmin);
+// Staff (superadmin or group manager) from here down. A manager is confined
+// to its own group's matches inside each controller (lib/scope.js).
+router.all("*", requireStaff);
 
 // Per-match HEXUDON standings: every question this match owns, aggregated per
-// team. Admin only, like the round-level view -- it exposes every team's
+// team. Staff only, like the round-level view -- it exposes every team's
 // standing, not just the caller's.
 router.route("/:id/hexudon-summary").get(getMatchHexudonSummary);
 

@@ -24,9 +24,25 @@ Team.init(
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    // Superadmin: the organiser. Unscoped -- sees and edits everything on both
+    // the manager and the game service (the JWT flag is trusted there too).
     is_admin: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
+    },
+    // School/group this account belongs to (models/group.js). NULL = none yet.
+    // Assigned by hand: by the superadmin, or by that group's manager pulling
+    // an ungrouped account in.
+    group_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    // "manager" = runs its group's matches (a dedicated non-playing account);
+    // "member" = an ordinary team. Meaningless without group_id.
+    group_role: {
+      type: DataTypes.STRING(16),
+      allowNull: false,
+      defaultValue: "member",
     },
   },
   {
