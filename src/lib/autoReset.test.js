@@ -16,6 +16,7 @@ const {
   isPerTeamQuestion,
   nextDueSec,
 } = require("./autoResetPlan");
+const { DEFAULT_SELECTION_SECONDS } = require("./questionSchedule");
 
 const NOW_MS = 1_700_000_000_000; // fixed clock: 1700000000 s
 const question = (data, id = 42) => ({
@@ -38,8 +39,23 @@ const tests = {
     ]);
   },
 
-  "a timed match with no window configured restarts at now"() {
+  "a board with no window declared falls back to the shared default"() {
+    // 60 s (questionSchedule.DEFAULT_SELECTION_SECONDS), not 0: the manual
+    // reset route offers the same default, and a replay with no pre-match phase
+    // at all would default every team to all-patrol.
     const targets = autoResetTargets(question({ startsAt: 1 }), [], NOW_MS);
+    assert.deepStrictEqual(targets, [
+      { gameId: "42", startsAt: 1_700_000_000 + DEFAULT_SELECTION_SECONDS },
+    ]);
+    assert.strictEqual(DEFAULT_SELECTION_SECONDS, 60);
+  },
+
+  "an explicit zero window is still honoured"() {
+    const targets = autoResetTargets(
+      question({ startsAt: 1, agent_selection_time_limit: 0 }),
+      [],
+      NOW_MS,
+    );
     assert.deepStrictEqual(targets, [{ gameId: "42", startsAt: 1_700_000_000 }]);
   },
 
@@ -79,7 +95,9 @@ const tests = {
       [],
       NOW_MS,
     );
-    assert.deepStrictEqual(targets, [{ gameId: "9", startsAt: 1_700_000_000 }]);
+    assert.deepStrictEqual(targets, [
+      { gameId: "9", startsAt: 1_700_000_000 + DEFAULT_SELECTION_SECONDS },
+    ]);
   },
 
   "the next due time is the interval away, in epoch SECONDS"() {

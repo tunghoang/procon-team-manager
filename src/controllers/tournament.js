@@ -1,8 +1,13 @@
 const { Tournament, Round, Match, Team } = require("../models");
 const useController = require("../lib/useController");
 const { isStaff } = require("../lib/scope");
+const { resyncAutoIncrement } = require("../lib/common");
+const {
+  deleteGamesQuietly,
+  engineGameIdsUnder,
+} = require("../lib/engineGames");
 const { Sequelize } = require('sequelize');
-const { getAll, get, update, create, remove } = useController(Tournament);
+const { getAll, get, update, create } = useController(Tournament);
 
 const getTournaments = async (req, res) => {
   // Staff (superadmin or group manager) browse every tournament; see getRounds.
@@ -48,8 +53,21 @@ const updateTournament = async (req, res) => {
   await update(req, res);
 };
 
+/** Same engine cleanup as removeRound, one level up. */
 const removeTournament = async (req, res) => {
-  await remove(req, res);
+  try {
+    const tournament = await Tournament.findByPk(req.params.id);
+    if (!tournament) {
+      return res.status(404).json({ message: "Tournament not found" });
+    }
+    const gameIds = await engineGameIdsUnder({ tournamentId: tournament.id });
+    await tournament.destroy();
+    await resyncAutoIncrement(Tournament);
+    const gameSync = await deleteGamesQuietly(gameIds);
+    return res.status(200).json({ id: req.params.id, game_sync: gameSync });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 module.exports = {

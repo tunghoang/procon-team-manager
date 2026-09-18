@@ -8,7 +8,10 @@
  *     no day at all (days_submitted 0) -- takes the match's LAST position.
  *     Sitting a match out must never pay off. Note that merely missing the
  *     agent-kind window is NOT sitting out: the engine defaults such a team to
- *     all-patrol and it plays on, so it is ranked on what it scored;
+ *     all-patrol and it plays on, so it is ranked on what it scored. Nor is
+ *     never reaching the game: a team on the roster that the engine's ranking
+ *     does not mention at all also takes last place, rather than dropping out
+ *     of the standings and scoring nothing;
  *   - a team that was not on that match's roster has nothing to score there, so
  *     the match simply does not appear for it.
  *
@@ -40,15 +43,27 @@ const competed = (detail) => {
  * Competing teams are numbered 1..k in the engine's own ranking order (which
  * already applies the official tie-break chain: distinct types, cumulative
  * daily types, servings, response time). Every rostered team that did not
- * compete takes the SAME last position -- the size of the match roster -- and
- * is flagged so the UI and the export can show why it got there.
+ * compete takes the SAME last position and is flagged so the UI and the export
+ * can show why it got there.
+ *
+ * `roster` is the match's roster as the manager knows it, and it is what makes
+ * "sitting a match out never pays off" hold. A team the ENGINE never ranked --
+ * rostered after the question was created, or removed from the game by hand --
+ * used to fall out of the standings entirely and score nothing, which is a
+ * BETTER outcome than playing and losing. It now takes last place like any
+ * other absentee. Without a roster (older callers) the ranking is the roster,
+ * which is the previous behaviour exactly.
+ *
+ * Last position is max(ranking, roster): a game may also rank a team that is no
+ * longer on the roster, and neither list may push a competitor's position down.
  */
-const positionsFor = (result) => {
+const positionsFor = (result, roster = null) => {
   const ranking = Array.isArray(result?.ranking) ? result.ranking : [];
   const detail = result?.detail || {};
-  const lastPosition = ranking.length;
+  const rosterIds = Array.isArray(roster) ? roster.map(String) : [];
+  const lastPosition = Math.max(ranking.length, rosterIds.length);
   let earned = 0;
-  return ranking.map((teamId) => {
+  const rows = ranking.map((teamId) => {
     const teamDetail = detail[String(teamId)] || detail[teamId] || {};
     const didCompete = competed(teamDetail);
     if (didCompete) earned += 1;
@@ -68,10 +83,36 @@ const positionsFor = (result) => {
       days_submitted: teamDetail.days_submitted ?? 0,
     };
   });
+
+  // Rostered but absent from the engine's ranking: last place, nothing scored.
+  const ranked = new Set(rows.map((row) => row.team_id));
+  for (const teamId of rosterIds) {
+    if (ranked.has(teamId)) continue;
+    ranked.add(teamId);
+    rows.push({
+      team_id: teamId,
+      position: lastPosition,
+      counted: true,
+      competed: false,
+      distinct_types: 0,
+      cumulative_daily_types: 0,
+      total_servings: 0,
+      cumulative_response_time: 0,
+      missed_selection: false,
+      days_submitted: 0,
+      // Distinguishes "on the roster, never reached the game" from "played and
+      // answered no day": both are last place, but only one is an admin problem.
+      absent_from_game: true,
+    });
+  }
+  return rows;
 };
 
 /**
- * @param {Array} matches  [{question_id, match_name, question_name, status, result}]
+ * @param {Array} matches  [{question_id, match_name, question_name, status,
+ *                           roster, result}] -- `roster` is that match's team
+ *                           ids; when absent the engine's ranking is used as
+ *                           the roster (see positionsFor).
  * @param {Array} teams    [{id, name}] every team in the round
  * @returns {{matches: Array, teams: Array}} matches carry their per-team rows,
  *          teams carry the round total, already sorted and given a round rank.
@@ -98,7 +139,7 @@ const buildRoundSummary = (matches, teams) => {
 
   const matchRows = [];
   for (const match of matches) {
-    const rows = positionsFor(match.result);
+    const rows = positionsFor(match.result, match.roster);
     for (const row of rows) {
       // A team that played but is no longer in the round's team list (e.g.
       // removed afterwards) still gets an entry, so nothing silently vanishes.
@@ -124,6 +165,7 @@ const buildRoundSummary = (matches, teams) => {
         position: row.position,
         counted: row.counted,
         competed: row.competed,
+        absent_from_game: row.absent_from_game === true,
         missed_selection: row.missed_selection,
         days_submitted: row.days_submitted,
         distinct_types: row.distinct_types,

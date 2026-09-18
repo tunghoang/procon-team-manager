@@ -9,8 +9,11 @@ const {
   canAddToGroup,
   canRemoveFromGroup,
 } = require("../lib/scope");
+const { groupMoveConflict } = require("../lib/groupRoster");
+const { resyncAutoIncrement } = require("../lib/common");
+const { setGroupOnMatchGames } = require("../lib/engineGames");
 
-const { get, update, create, remove } = useController(Group);
+const { get, update, create } = useController(Group);
 
 // What a member row shows inside a group: never the password hash.
 const MEMBER_ATTRIBUTES = ["id", "name", "account", "group_role", "is_admin"];
@@ -101,12 +104,38 @@ const removeGroup = async (req, res) => {
   try {
     const group = await Group.findByPk(req.params.id);
     if (!group) return res.status(404).json({ message: "Group not found" });
+    // Collected BEFORE the group_id columns are cleared -- afterwards there is
+    // nothing left to say which matches used to belong to this group.
+    const orphanedMatches = await Match.findAll({
+      where: { group_id: group.id },
+      attributes: ["id"],
+    });
     await Team.update(
       { group_id: null, group_role: "member" },
       { where: { group_id: group.id } },
     );
     await Match.update({ group_id: null }, { where: { group_id: group.id } });
-    await remove(req, res);
+    await group.destroy();
+    await resyncAutoIncrement(Group);
+
+    // The engine stores the owning group on each game and treats that group's
+    // manager as its admin. With the group gone the games have to drop it too,
+    // or a deleted group's manager account would keep admin rights over them.
+    const gameSync = await setGroupOnMatchGames(
+      orphanedMatches.map((m) => m.id),
+      null,
+    );
+    const failed = gameSync.filter((row) => !row.ok);
+    if (failed.length) {
+      return res.status(502).json({
+        message:
+          `Group deleted, but ${failed.length} game(s) still carry it on the ` +
+          "engine.",
+        id: req.params.id,
+        game_sync: gameSync,
+      });
+    }
+    return res.status(200).json({ id: req.params.id, game_sync: gameSync });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -189,6 +218,13 @@ const addMembers = async (req, res) => {
               : `"${team.name}" already belongs to another group`,
         });
       }
+      // Only the superadmin gets here with a team that already has a group.
+      // Moving it must not leave its old group's matches with an outsider on
+      // the roster (lib/groupRoster.js).
+      const conflict = await groupMoveConflict(team, groupId);
+      if (conflict) {
+        return res.status(conflict.status).json({ message: conflict.message });
+      }
     }
     // A team moved by the superadmin out of another group loses any manager
     // role it held there; a fresh member has none to begin with.
@@ -215,6 +251,13 @@ const removeMember = async (req, res) => {
     }
     if (!canRemoveFromGroup(req.auth, team)) {
       return res.status(403).json({ message: "A manager cannot remove itself from its group" });
+    }
+    // Dropping a team out of its group while it is still rostered on that
+    // group's matches would leave those matches with a player the group no
+    // longer contains -- which every ADD-side check would refuse.
+    const conflict = await groupMoveConflict(team, null);
+    if (conflict) {
+      return res.status(conflict.status).json({ message: conflict.message });
     }
     await team.update({ group_id: null, group_role: "member" });
     return res.status(200).json({ group_id: groupId, team_id: team.id });

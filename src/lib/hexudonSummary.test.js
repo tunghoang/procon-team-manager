@@ -9,11 +9,13 @@
  * no day at all -- takes the match's LAST position (so sitting one out never
  * pays off), and a team that was not on a match's roster simply has no entry
  * for it. Missing the agent-kind window is NOT sitting out: such a team plays
- * as all-patrol and is ranked on what it scored.
+ * as all-patrol and is ranked on what it scored, and neither is being missing
+ * from the engine's game: a rostered team the engine never ranked takes last
+ * place rather than dropping out of the standings.
  */
 
 const assert = require("assert");
-const { buildRoundSummary } = require("./hexudonSummary");
+const { buildRoundSummary, positionsFor } = require("./hexudonSummary");
 
 const TEAMS = [
   { id: 1, name: "Alpha" },
@@ -38,10 +40,14 @@ const detailFor = (ids, overrides = {}) =>
     ])
   );
 
-const match = (id, ranking, overrides = {}) => ({
+// `roster` is what the controller now passes (the match's team ids). Left off
+// here for the cases that predate it, which pins the fallback: no roster means
+// the engine's ranking IS the roster.
+const match = (id, ranking, overrides = {}, roster = undefined) => ({
   question_id: id,
   match_name: `Match ${id}`,
   question_name: `Q${id}`,
+  roster: roster === undefined ? undefined : roster.map(String),
   result: { ranking: ranking.map(String), detail: detailFor(ranking, overrides) },
 });
 
@@ -241,6 +247,61 @@ const tests = {
     const ghost = summary.teams.find((t) => t.team_id === "7");
     assert.ok(ghost, "a team present in the engine result must not vanish");
     assert.strictEqual(ghost.rank_points, 3);
+  },
+
+  "a rostered team the engine never ranked takes the match's last place"() {
+    // Happens when the roster is edited after the question was created (the
+    // team was never registered on the game) or the engine game was rebuilt.
+    // It used to vanish from the standings and score NOTHING, which beat
+    // playing and losing.
+    const summary = buildRoundSummary(
+      [match(10, [1, 2], {}, [1, 2, 3]), match(11, [1, 2, 3], {}, [1, 2, 3])],
+      TEAMS
+    );
+    const gamma = byName(summary, "Gamma");
+    assert.strictEqual(gamma.matches_counted, 2, "both matches score");
+    assert.strictEqual(gamma.matches_played, 1);
+    assert.strictEqual(gamma.matches_missed, 1);
+    assert.strictEqual(
+      gamma.per_match[10].position,
+      3,
+      "last of a 3-team roster, even though the ranking held 2"
+    );
+    assert.strictEqual(gamma.per_match[10].competed, false);
+    assert.strictEqual(gamma.per_match[10].absent_from_game, true);
+    assert.strictEqual(gamma.rank_points, 6, "3 (roster last) + 3");
+    // ...and it must not have cost the teams that did play.
+    assert.strictEqual(byName(summary, "Alpha").per_match[10].position, 1);
+    assert.strictEqual(byName(summary, "Beta").per_match[10].position, 2);
+  },
+
+  "a team ranked by the engine but off the roster still counts"() {
+    // The reverse skew: the roster shrank after the game was played. Both
+    // lists are honoured, and last place is the larger of the two.
+    const rows = positionsFor(
+      { ranking: ["1", "2", "7"], detail: detailFor([1, 2, 7]) },
+      ["1", "2"]
+    );
+    assert.strictEqual(rows.length, 3);
+    assert.deepStrictEqual(
+      rows.map((r) => r.position),
+      [1, 2, 3]
+    );
+  },
+
+  "no roster falls back to the ranking, exactly as before"() {
+    const withRoster = positionsFor(
+      { ranking: ["1", "2"], detail: detailFor([1, 2]) },
+      ["1", "2"]
+    );
+    const without = positionsFor({
+      ranking: ["1", "2"],
+      detail: detailFor([1, 2]),
+    });
+    assert.deepStrictEqual(
+      without.map((r) => [r.team_id, r.position]),
+      withRoster.map((r) => [r.team_id, r.position])
+    );
   },
 
   "an empty round produces no ranks rather than throwing"() {

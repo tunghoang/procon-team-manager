@@ -5,6 +5,7 @@ const { comparePassword, encryptPassword } = require("../lib/encrypt");
 const useController = require("../lib/useController");
 const { getFilter } = require("../lib/common");
 const { isSuperAdmin, isManager, managerGroupId } = require("../lib/scope");
+const { groupMoveConflict } = require("../lib/groupRoster");
 const { get, update, create, remove } = useController(Team);
 
 const filterField = {
@@ -89,7 +90,8 @@ const getTeam = async (req, res) => {
       ? await Team.findByPk(req.params.id, { attributes: ["id", "group_id"] })
       : null;
     if (!target || Number(target.group_id) !== managerGroupId(req.auth)) {
-      return res.status(405).json({ message: "Not allowed" });
+      // 403, not 405: the route and method are right, the caller is not.
+      return res.status(403).json({ message: "Not allowed" });
     }
   }
   const include = [
@@ -119,9 +121,22 @@ const normalizeGroupFields = (body) => {
 
 const updateTeam = async (req, res) => {
   try {
+    normalizeGroupFields(req.body);
+    if ("group_id" in req.body) {
+      // Moving (or ungrouping) a team must not strand it on its old group's
+      // match rosters -- the same invariant the group endpoints enforce
+      // (lib/groupRoster.js). Read the CURRENT row for the group it leaves.
+      const current = await Team.findByPk(req.params.id, {
+        attributes: ["id", "name", "group_id"],
+      });
+      if (!current) return res.status(404).json({ message: "Team not found" });
+      const conflict = await groupMoveConflict(current, req.body.group_id);
+      if (conflict) {
+        return res.status(conflict.status).json({ message: conflict.message });
+      }
+    }
     req.body.password =
       req.body.password && (await encryptPassword(req.body.password));
-    normalizeGroupFields(req.body);
     await update(req, res);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -160,13 +175,25 @@ const signin = async (req, res) => {
     });
   }
   try {
+    // Missing credentials take the same answer as wrong ones. (They also used
+    // to reach Sequelize as `account: undefined` and bcrypt as `undefined`,
+    // both of which throw -- a 500 on an empty form.)
+    if (!account || !password) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
     const team = await Team.findOne({
       where: { account },
     });
-    if (!team) return res.status(404).json({ message: "Account not found" });
-    const isMatch = await comparePassword(password, team.password);
-    if (!isMatch)
-      return res.status(400).json({ message: "Account or password error" });
+    // One answer for both "no such account" and "wrong password": 404
+    // "Account not found" vs 400 "Account or password error" told an attacker
+    // which account names are real, which is all a credential-stuffing list
+    // needs. The UI shows whatever `message` says (procon-react
+    // api/auth.js#apiSignIn), so no message key is being broken here.
+    const isMatch =
+      !!team && (await comparePassword(password, team.password));
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
     const payload = tokenPayload(team);
     const token = jwt.sign(payload, process.env.JWT_SECRET_KEY, {
@@ -205,19 +232,46 @@ const createTeam = async (req, res) => {
   }
 };
 
+/**
+ * PUT /team/password  { current_password, password } -- change YOUR OWN password.
+ *
+ * The current password is required. Without it a token alone was enough to
+ * change the password it authenticates -- so a token picked up anywhere (it
+ * lives for two days, and the same token administers the game service) could
+ * be turned into permanent ownership of the account, locking the real team out
+ * mid-contest. Proving the current password is what makes the token
+ * insufficient.
+ */
 const changePassword = async (req, res) => {
   try {
-    const team = await Team.findByPk(req.auth.id);
+    // The bootstrap admin is an env-var login with no row (see signin), so
+    // there is nothing here to change.
+    if (Number(req.auth.id) === 0) {
+      return res.status(400).json({
+        message:
+          "bootstrap admin password is set by environment " +
+          "(BOOTSTRAP_ADMIN_PASSWORD); create a real admin account to change a password here",
+      });
+    }
 
+    const { current_password: currentPassword, password } = req.body || {};
+    if (!password) {
+      return res.status(400).json({ message: "password is required" });
+    }
+    if (!currentPassword) {
+      return res.status(400).json({ message: "current_password is required" });
+    }
+
+    const team = await Team.findByPk(req.auth.id);
     if (!team) return res.status(404).json({ message: "Team not found" });
 
-    if (!req.body.password)
-      return res.status(406).json({ message: "password invalid" });
+    // Same comparison as signin.
+    const isMatch = await comparePassword(currentPassword, team.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "current_password is incorrect" });
+    }
 
-    const newPassword = await encryptPassword(req.body.password);
-
-    team.password = newPassword;
-
+    team.password = await encryptPassword(password);
     await team.save();
 
     return res.status(200).json({ id: team.id });

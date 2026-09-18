@@ -32,6 +32,7 @@ const {
   isPerTeamQuestion,
   nextDueSec,
 } = require("./autoResetPlan");
+const { shiftQuestionSchedule } = require("./questionSchedule");
 
 const TICK_MS = Number(process.env.AUTO_RESET_TICK_MS || 15_000);
 
@@ -51,8 +52,18 @@ const postReset = (gameId, startsAt) =>
   });
 
 /**
- * Reset every engine game behind one question. Returns {total, failed} rather
- * than throwing: one dead game must not stop the others, or stop the cron.
+ * Reset every engine game behind one question, then write the new Day 1 back
+ * into `question_data`.
+ *
+ * That second half is not bookkeeping: `question_data.startsAt` is what
+ * lib/questionVisibility.js gates the board on and what the play screen counts
+ * down to, so a reset that moved Day 1 only on the engine left this service
+ * publishing the full map during the new pre-match window -- the gate was
+ * decorative after the first tick. Both reset paths now go through the same
+ * pure helper (lib/questionSchedule.js).
+ *
+ * Returns {total, failed, startsAt} rather than throwing: one dead game must
+ * not stop the others, or stop the cron.
  */
 const resetGamesForQuestion = async (question) => {
   const teamIds = isPerTeamQuestion(question)
@@ -72,7 +83,27 @@ const resetGamesForQuestion = async (question) => {
       );
     }
   }
-  return { total: targets.length, failed };
+
+  // Every target of one question shares the same schedule (practice modes have
+  // none at all), so the first one carries it.
+  const startsAt = targets[0]?.startsAt ?? null;
+  // Only if the engine actually took the new schedule somewhere: re-anchoring
+  // the row while every game still sits at the old Day 1 would be worse than
+  // leaving it.
+  if (startsAt != null && failed < targets.length) {
+    const shifted = shiftQuestionSchedule(question.question_data, startsAt);
+    if (shifted.changed) {
+      try {
+        await question.update({ question_data: shifted.json });
+      } catch (err) {
+        console.warn(
+          `auto-reset of question ${question.id}: question_data not updated:`,
+          err.message,
+        );
+      }
+    }
+  }
+  return { total: targets.length, failed, startsAt };
 };
 
 let running = false;

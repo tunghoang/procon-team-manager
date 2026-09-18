@@ -3,7 +3,12 @@ const { Match, Team } = require("../models");
 const { Sequelize } = require('sequelize');
 const useController = require("../lib/useController");
 const { isStaff } = require("../lib/scope");
-const { getAll, get, update, create, remove } = useController(Round);
+const { resyncAutoIncrement } = require("../lib/common");
+const {
+  deleteGamesQuietly,
+  engineGameIdsUnder,
+} = require("../lib/engineGames");
+const { getAll, get, update, create } = useController(Round);
 
 const filterField = {
   match_id: {
@@ -69,19 +74,42 @@ const getRound = async (req, res) => {
 };
 
 const createRound = async (req, res) => {
-  const round = await Round.findOne({
-    where: { name: req.body.name, tournament_id: req.body.tournament_id },
-  });
-  if (round) return res.status(400).json({ message: "Duplicated name" });
-  await create(req, res);
+  // Wrapped: the duplicate-name lookup used to sit outside any try, so a DB
+  // error here rejected the handler's promise and left the request hanging
+  // until the client timed out instead of answering 500.
+  try {
+    const round = await Round.findOne({
+      where: { name: req.body.name, tournament_id: req.body.tournament_id },
+    });
+    if (round) return res.status(400).json({ message: "Duplicated name" });
+    await create(req, res);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const updateRound = async (req, res) => {
   await update(req, res);
 };
 
+/**
+ * Deleting a round cascades to its matches, questions and answers in the DB --
+ * and, before this, left every engine game under it running forever, because
+ * the cascade happens inside MySQL and the game service never hears about it.
+ * The game ids are resolved from the subtree BEFORE it is destroyed.
+ */
 const removeRound = async (req, res) => {
-  await remove(req, res);
+  try {
+    const round = await Round.findByPk(req.params.id);
+    if (!round) return res.status(404).json({ message: "Round not found" });
+    const gameIds = await engineGameIdsUnder({ roundId: round.id });
+    await round.destroy();
+    await resyncAutoIncrement(Round);
+    const gameSync = await deleteGamesQuietly(gameIds);
+    return res.status(200).json({ id: req.params.id, game_sync: gameSync });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 module.exports = {

@@ -3,10 +3,9 @@ const useController = require("../lib/useController");
 const { Match, Question, Answer, OptimalAnswer } = require("../models");
 const { update } = useController(Question);
 const {
+  engineErrorMessage,
   getFilter,
   getServiceApi,
-  resyncAutoIncrement,
-  serviceAdminToken,
 } = require("../lib/common");
 const {
   isStaff,
@@ -17,10 +16,29 @@ const {
 const {
   MAX_MINUTES,
   MIN_MINUTES,
-  isPerTeamQuestion,
   nextDueSec,
 } = require("../lib/autoResetPlan");
 const { redactQuestionForTeam } = require("../lib/questionVisibility");
+const {
+  defaultResetStartsAt,
+  parseStoredBoard,
+  rejectResetStartsAt,
+  shiftQuestionSchedule,
+} = require("../lib/questionSchedule");
+// Every engine call from here is made as the SERVICE, not with the caller's
+// own token: a group manager's token is not an engine admin (it is only an
+// admin over its own group's games, and only once those carry the group id
+// this controller stamps on them at /game/init). Scope is enforced here, on
+// the match, before any engine call is made. See lib/engineGames.js for the
+// shared house rules (timeout, no retries, tolerated 404s, never throws).
+const {
+  deleteGamesQuietly,
+  engineAuthHeader,
+  engineGameIdsFor,
+  pooled,
+  resetGameOnEngine,
+  rosterTeamIdsForMatch,
+} = require("../lib/engineGames");
 const { sequelize } = require("../models");
 const { QueryTypes } = require("sequelize");
 
@@ -30,49 +48,6 @@ const include = [
     as: "match",
   },
 ];
-
-// Every engine call from here is made as the SERVICE, not with the caller's
-// own token: a group manager's token is not an engine admin (it is only an
-// admin over its own group's games, and only once those carry the group id
-// this controller stamps on them at /game/init). Scope is enforced here, on
-// the match, before any engine call is made.
-const engineAuthHeader = () => `Bearer ${serviceAdminToken()}`;
-
-// Best-effort delete of a game on the HEXUDON engine. Never throws: a game
-// that's already absent (404) or a briefly-unreachable engine must not block
-// deleting the manager's own question record. An orphaned engine game is
-// harmless (its id no longer matches any question).
-const deleteGameQuietly = async (gameId, authHeader) => {
-  try {
-    await got.delete(`${getServiceApi()}/game/${gameId}`, {
-      headers: { Authorization: authHeader },
-    });
-  } catch (err) {
-    console.warn(
-      `engine game delete for ${gameId} failed (ignored):`,
-      err.response?.statusCode || err.message,
-    );
-  }
-};
-
-/**
- * Every engine game a question owns. A plain-practice question runs one solo
- * game PER ROSTERED TEAM (`${question.id}:${teamId}`); everything else is the
- * one shared game at the bare id. The bare id is always included: it costs a
- * harmless 404 and covers a practice question whose roster has since changed.
- * Must be computed BEFORE the question row is deleted (it reads question_data).
- */
-const engineGameIdsFor = async (question) => {
-  const ids = [String(question.id)];
-  if (isPerTeamQuestion(question)) {
-    const rows = await sequelize.query(
-      "SELECT team_id FROM team_match WHERE match_id = :matchId",
-      { replacements: { matchId: question.match_id }, type: QueryTypes.SELECT },
-    );
-    for (const row of rows) ids.push(`${question.id}:${row.team_id}`);
-  }
-  return ids;
-};
 
 // Stamp the match's practice flags onto a question's raw_questions body and
 // report them back. Shared by the single and bulk create paths.
@@ -100,6 +75,125 @@ const prepareRawQuestion = (raw, match) => {
     raw.group_id = match?.group_id ?? null;
   }
   return { isPractice, noReset };
+};
+
+/**
+ * Columns a CREATE may never set from the request body.
+ *
+ * `auto_reset_*` belong to PUT /question/:id/auto-reset, which is where their
+ * bounds ([MIN_MINUTES, MAX_MINUTES]) and "first run one interval from now"
+ * rule live; set straight through a create they skipped both. `id` is the
+ * question's own UUID and doubles as the engine's game_id.
+ */
+const CREATE_ONLY_FORBIDDEN = [
+  "id",
+  "auto_reset_minutes",
+  "auto_reset_at_sec",
+  "question_data",
+];
+
+const stripCreateOnlyFields = (body) => {
+  for (const field of CREATE_ONLY_FORBIDDEN) delete body[field];
+  return body;
+};
+
+/**
+ * A private copy of a board, so that mutating it (prepareRawQuestion stamps the
+ * practice flags on it, applyMatchRoster rewrites its `teams`) cannot reach any
+ * other entry in a bulk request that shares the same object.
+ *
+ * A board is always plain JSON off the wire, so a JSON round-trip is a faithful
+ * deep copy -- and unlike structuredClone it cannot throw on an exotic value.
+ */
+/**
+ * Roll a transaction back unless it is already finished, and never throw.
+ *
+ * Sequelize sets `transaction.finished` to "commit"/"rollback" and then
+ * REFUSES a second call ("Transaction cannot be rolled back because it has
+ * been finished"). Since a failing `commit()` sets that flag before throwing,
+ * the catch block that follows must not assume the transaction is still open --
+ * otherwise its own rollback throws and the engine-game cleanup after it is
+ * skipped, which leaves games alive for a question that does not exist.
+ */
+const rollbackQuietly = async (transaction) => {
+  if (!transaction || transaction.finished) return;
+  try {
+    await transaction.rollback();
+  } catch (error) {
+    console.warn("transaction rollback failed (ignored):", error.message);
+  }
+};
+
+const cloneBoard = (raw) => {
+  if (raw == null || typeof raw !== "object") return raw;
+  try {
+    return JSON.parse(JSON.stringify(raw));
+  } catch {
+    // Not serialisable -> not a board the engine could take either; hand it
+    // back untouched and let the pre-flight refuse it.
+    return raw;
+  }
+};
+
+/**
+ * Point a pasted board's `teams` at the match's REAL roster.
+ *
+ * The React "Generate" path already does this (dialogs/question.jsx: every team
+ * shares the generated start cluster, because the docs require an identical
+ * starting layout for every team), but the Manual-JSON path a group manager
+ * must use kept whatever `teams[].team_id` values were in the pasted text --
+ * usually the ids of whatever match the board was generated for. The engine
+ * then registered a game whose roster is a set of strangers, and every rostered
+ * team got a bare 403 on /game/day with nothing on the admin side to explain it.
+ *
+ * Two shapes are accepted:
+ *   - the pasted list already IS the roster (same set of team ids, no
+ *     duplicates): kept verbatim, so a deliberate per-team start layout
+ *     survives;
+ *   - anything else: rebuilt from the roster, reusing the first usable
+ *     `agents` list as the shared template.
+ *
+ * `players` is left alone on purpose: the engine takes it on input but derives
+ * the real value from `len(teams)` (game_service.py), so it is cosmetic here.
+ *
+ * @returns {Promise<string|null>} a 400 message, or null when the board is fine
+ */
+const applyMatchRoster = async (raw, match) => {
+  if (!raw || typeof raw !== "object") {
+    return "no board found -- put the /game/init fields under raw_questions";
+  }
+  const rosterIds = (await rosterTeamIdsForMatch(match.id)).map(String);
+  if (!rosterIds.length) {
+    return (
+      "this match has no teams on its roster yet -- add the teams to the " +
+      "match first, then create the question (the board's teams[] is built " +
+      "from the roster)"
+    );
+  }
+
+  const pasted = Array.isArray(raw.teams) ? raw.teams : [];
+  const pastedIds = pasted.map((team) => String(team?.team_id));
+  const rosterSet = new Set(rosterIds);
+  const sameRoster =
+    pastedIds.length === rosterIds.length &&
+    new Set(pastedIds).size === pastedIds.length &&
+    pastedIds.every((id) => rosterSet.has(id));
+  if (sameRoster) return null;
+
+  const template = pasted.find(
+    (team) => Array.isArray(team?.agents) && team.agents.length,
+  )?.agents;
+  if (!template) {
+    return (
+      "the board needs at least one teams[] entry with a non-empty agents " +
+      "list: it is the start layout every team shares"
+    );
+  }
+  raw.teams = rosterIds.map((teamId) => ({
+    team_id: teamId,
+    agents: [...template],
+  }));
+  return null;
 };
 
 // Create the HEXUDON engine game(s) backing one question.
@@ -276,6 +370,26 @@ const getQuestion = async (req, res) => {
   }
 };
 
+/**
+ * The ONLY columns an edit may touch. Everything else about a question is
+ * either derived from its match (`match_id`), owned by another endpoint
+ * (`auto_reset_*` -> PUT /question/:id/auto-reset) or frozen at /game/init time
+ * (`question_data`). Passing the whole row through `update()` let a manager
+ * re-home a question under any match by id and set an auto-reset interval that
+ * skipped its own bounds check.
+ *
+ * `difficulty` and `weight` are the organiser's own labels for weighting
+ * questions BY HAND (models/question.js): nothing here or on the engine reads
+ * them, and they are meant to be editable after the board exists.
+ */
+const QUESTION_UPDATE_FIELDS = [
+  "name",
+  "description",
+  "order",
+  "difficulty",
+  "weight",
+];
+
 const updateQuestion = async (req, res) => {
   try {
     const { id } = req.params;
@@ -300,10 +414,60 @@ const updateQuestion = async (req, res) => {
       });
     }
 
+    // Whitelist, don't blacklist: an unknown extra field is dropped rather
+    // than handed to the ORM.
+    const body = {};
+    for (const field of QUESTION_UPDATE_FIELDS) {
+      if (req.body[field] === undefined) continue;
+      if (field === "order") {
+        const order = Number(req.body.order);
+        if (!Number.isInteger(order)) {
+          return res.status(400).json({ message: "order must be an integer" });
+        }
+        body.order = order;
+        continue;
+      }
+      if (field === "name") {
+        const name = String(req.body.name).trim();
+        if (!name) return res.status(400).json({ message: "name is required" });
+        body.name = name;
+        continue;
+      }
+      if (field === "weight") {
+        // A FLOAT column: "" from a cleared form means "no coefficient".
+        if (req.body.weight === null || req.body.weight === "") {
+          body.weight = null;
+          continue;
+        }
+        const weight = Number(req.body.weight);
+        if (!Number.isFinite(weight)) {
+          return res
+            .status(400)
+            .json({ message: "weight must be a number (or null to clear it)" });
+        }
+        body.weight = weight;
+        continue;
+      }
+      if (field === "difficulty") {
+        // VARCHAR(32), free-form: it is a label the organiser reads, and no
+        // code branches on its value.
+        if (req.body.difficulty === null || req.body.difficulty === "") {
+          body.difficulty = null;
+          continue;
+        }
+        const difficulty = String(req.body.difficulty).trim().slice(0, 32);
+        body.difficulty = difficulty || null;
+        continue;
+      }
+      body[field] = req.body[field];
+    }
+    req.body = body;
+
     await update(req, res);
   } catch (error) {
-    let errMsg = error.response ? error.response.body : error.message;
-    return res.status(500).json({ message: errMsg });
+    // No engine call happens in this handler, so this is a DB/validation
+    // error: engineErrorMessage would have dressed it up as an engine one.
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -345,37 +509,148 @@ const setQuestionAutoReset = async (req, res) => {
   }
 };
 
-const removeQuestion = async (req, res) => {
-  const existing = await Question.findByPk(req.params.id, { include });
-  if (!existing) {
-    return res.status(404).json({ message: "Question not found" });
-  }
-  if (!canManageMatch(req.auth, existing.match)) {
-    return res.status(403).json({ message: "Not allowed" });
-  }
-  // Resolved up front: the per-team ids come from the row about to go.
-  const gameIds = await engineGameIdsFor(existing);
-  const transaction = await sequelize.transaction();
+/**
+ * POST /question/:id/reset -- replay one question's game(s) from Day 1.
+ *
+ * The manual counterpart of the auto-reset cron, and the route the admin UI
+ * uses. It exists here rather than in the browser because only this side knows
+ * which engine games a question owns, holds the service admin token, and can
+ * write the new schedule back to `question_data` -- which the UI could not do,
+ * and whose absence made the board gate decorative after every reset (see
+ * lib/questionSchedule.js).
+ *
+ * Body: { startsAt?: epoch seconds }. Defaults to
+ * `now + agent_selection_time_limit + 60 s`; anything earlier than
+ * `now + agent_selection_time_limit` is refused, because that window is the
+ * pre-match phase and a replay that starts inside it defaults every team to
+ * all-patrol.
+ *
+ * 200 when every game reset, 502 when some failed (the schedule is still
+ * written if at least one did, so the rest can be retried).
+ */
+const resetQuestion = async (req, res) => {
   try {
-    const deletedCount = await Question.destroy({
-      where: { id: req.params.id },
-      transaction,
-    });
-    if (deletedCount === 0) {
-      await transaction.rollback();
+    const question = await Question.findByPk(req.params.id, { include });
+    if (!question) {
       return res.status(404).json({ message: "Question not found" });
     }
+    if (!canManageMatch(req.auth, question.match)) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
 
-    await transaction.commit();
-    await resyncAutoIncrement(Question);
+    // Unparseable board data must still be resettable (that is often WHY the
+    // admin is resetting), so a corrupt row is treated as an empty one here.
+    const data = parseStoredBoard(question.question_data) || {};
+    // Practice games (plain AND competitive) are self-paced: the engine ignores
+    // startsAt for them, and there is no window to re-anchor here either.
+    const isPractice = !!data.is_practice;
+
+    let startsAt = null;
+    if (!isPractice) {
+      if (req.body?.startsAt === undefined || req.body.startsAt === null) {
+        startsAt = defaultResetStartsAt(data);
+      } else {
+        startsAt = Number(req.body.startsAt);
+        const refusal = rejectResetStartsAt(data, startsAt);
+        if (refusal) return res.status(400).json({ message: refusal });
+      }
+    }
+
+    const gameIds = await engineGameIdsFor(question);
+    const authHeader = engineAuthHeader();
+    const reset = [];
+    const failed = [];
+    // A game the engine does not have: for plain practice the bare question id
+    // never exists, so this is the normal case rather than a failure.
+    const missing = [];
+    const rows = await pooled(gameIds, (gameId) =>
+      resetGameOnEngine(gameId, startsAt, authHeader),
+    );
+    rows.forEach((row, index) => {
+      const gameId = gameIds[index];
+      if (!row.ok) failed.push({ id: gameId, reason: row.message });
+      else if (row.missing) missing.push(gameId);
+      else reset.push(gameId);
+    });
+
+    // Persist the new Day 1 unless literally nothing on the engine took it.
+    // The RAW stored text is passed in, not the tolerant `data` above, so a
+    // corrupt question_data is left exactly as it is for an admin to inspect
+    // rather than quietly replaced by a schedule-only body.
+    let persisted = null;
+    const fields = {};
+    if (reset.length > 0 || failed.length === 0) {
+      const shifted = shiftQuestionSchedule(question.question_data, startsAt);
+      if (shifted.changed) {
+        fields.question_data = shifted.json;
+        persisted = shifted.data.startsAt;
+      }
+      // Push the cron's next run a full interval past the NEW Day 1. It was
+      // anchored on whenever the interval was switched on, so a manual reset
+      // could be followed seconds later by an automatic one that wiped the
+      // freshly replayed game -- the same rule setQuestionAutoReset applies
+      // (nextDueSec), just measured from the new start instead of from now.
+      const minutes = Number(question.auto_reset_minutes) || 0;
+      if (minutes > 0) {
+        const anchorMs = (persisted ?? startsAt ?? null) != null
+          ? Number(persisted ?? startsAt) * 1000
+          : Date.now();
+        fields.auto_reset_at_sec = nextDueSec(minutes, anchorMs);
+      }
+    }
+    if (Object.keys(fields).length) await question.update(fields);
+
+    const ok = failed.length === 0;
+    return res.status(ok ? 200 : 502).json({
+      ok,
+      // null for a practice question: it has no timed window at all.
+      startsAt: persisted ?? (isPractice ? null : startsAt),
+      reset,
+      failed,
+      missing,
+    });
+  } catch (error) {
+    // The engine's own failures are already captured per game in `failed`
+    // (resetGameOnEngine never throws), so anything here is local.
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const removeQuestion = async (req, res) => {
+  try {
+    const existing = await Question.findByPk(req.params.id, { include });
+    if (!existing) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+    if (!canManageMatch(req.auth, existing.match)) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+    // Resolved up front: the per-team ids come from the row about to go.
+    const gameIds = await engineGameIdsFor(existing);
+    const transaction = await sequelize.transaction();
+    try {
+      const deletedCount = await Question.destroy({
+        where: { id: req.params.id },
+        transaction,
+      });
+      if (deletedCount === 0) {
+        await rollbackQuietly(transaction);
+        return res.status(404).json({ message: "Question not found" });
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await rollbackQuietly(transaction);
+      return res.status(500).json({ message: error.message });
+    }
     // Best-effort engine cleanup AFTER the DB delete is committed: a game
     // may already be gone on the engine (404) or the engine briefly
     // unreachable -- neither should make the question undeletable here.
-    const authHeader = engineAuthHeader();
-    await Promise.all(gameIds.map((gameId) => deleteGameQuietly(gameId, authHeader)));
+    // Pooled, so a practice question with a 20-team roster does not burst 21
+    // deletes past the engine's rate limit.
+    await deleteGamesQuietly(gameIds);
     return res.sendStatus(200);
   } catch (error) {
-    await transaction.rollback();
     return res.status(500).json({ message: error.message });
   }
 };
@@ -383,84 +658,92 @@ const removeQuestion = async (req, res) => {
 // Bulk delete questions
 // Body: { question_ids: number[] }
 const bulkDeleteQuestions = async (req, res) => {
-  const { question_ids } = req.body;
-  if (!question_ids?.length) {
-    return res.status(400).json({
-      message: "question_ids is required",
-    });
-  }
-  // Scope the whole batch first: one question outside the caller's reach
-  // rejects the request before anything is deleted.
-  const existing = await Question.findAll({
-    where: { id: question_ids },
-    include,
-  });
-  const barred = existing.find((q) => !canManageMatch(req.auth, q.match));
-  if (barred) {
-    return res.status(403).json({ message: `Not allowed: "${barred.name}"` });
-  }
-  const gameIds = (await Promise.all(existing.map(engineGameIdsFor))).flat();
-  const transaction = await sequelize.transaction();
-
   try {
-
-    await Answer.destroy({
-      where: { question_id: question_ids },
-      transaction,
-    });
-
-    await OptimalAnswer.destroy({
-      where: { question_id: question_ids },
-      transaction,
-    });
-
-    const deletedCount = await Question.destroy({
+    const { question_ids } = req.body;
+    if (!question_ids?.length) {
+      return res.status(400).json({
+        message: "question_ids is required",
+      });
+    }
+    // Scope the whole batch first: one question outside the caller's reach
+    // rejects the request before anything is deleted.
+    const existing = await Question.findAll({
       where: { id: question_ids },
-      transaction,
+      include,
     });
+    const barred = existing.find((q) => !canManageMatch(req.auth, q.match));
+    if (barred) {
+      return res.status(403).json({ message: `Not allowed: "${barred.name}"` });
+    }
+    const gameIds = (await Promise.all(existing.map(engineGameIdsFor))).flat();
+    const transaction = await sequelize.transaction();
 
-    await transaction.commit();
-    await resyncAutoIncrement(Question);
+    let deletedCount = 0;
+    try {
+      await Answer.destroy({
+        where: { question_id: question_ids },
+        transaction,
+      });
+
+      await OptimalAnswer.destroy({
+        where: { question_id: question_ids },
+        transaction,
+      });
+
+      deletedCount = await Question.destroy({
+        where: { id: question_ids },
+        transaction,
+      });
+
+      await transaction.commit();
+    } catch (error) {
+      await rollbackQuietly(transaction);
+      return res.status(500).json({ message: error.message });
+    }
+
     // Best-effort engine cleanup after the DB delete commits, one per game,
     // each swallowing its own error so one missing/failed game never rolls
     // back (and thus un-deletes) the whole batch.
-    const authHeader = engineAuthHeader();
-    await Promise.all(gameIds.map((gameId) => deleteGameQuietly(gameId, authHeader)));
+    await deleteGamesQuietly(gameIds);
 
     return res.status(200).json({
       message: `Successfully deleted ${deletedCount} question(s)`,
       deleted_count: deletedCount,
     });
   } catch (error) {
-    await transaction.rollback();
     return res.status(500).json({ message: error.message });
   }
 };
 
 const createQuestion = async (req, res) => {
-  if (!req.body.match_id) {
-    return res.status(406).json({ message: "match_id invalid" });
-  }
-  // Resolve and scope the match before opening the transaction: a refusal
-  // here must not leave a transaction dangling.
-  const match = await Match.findByPk(req.body.match_id);
-  if (!match) {
-    return res.status(406).json({ message: "match_id invalid" });
-  }
-  if (!canManageMatch(req.auth, match)) {
-    return res.status(403).json({ message: "Not allowed" });
-  }
-
-  const transaction = await sequelize.transaction();
-  const createdGameIds = [];
-
   try {
+    if (!req.body.match_id) {
+      return res.status(400).json({ message: "match_id is required" });
+    }
+    // Resolve, scope and validate EVERYTHING that can refuse the request
+    // before opening the transaction. An early `return` from inside the
+    // transaction never rolled it back, and with a pool of 5 connections five
+    // duplicate-name attempts were enough to hang every query in the process
+    // for the connection timeout.
+    const match = await Match.findByPk(req.body.match_id);
+    if (!match) {
+      return res.status(400).json({ message: "match_id invalid" });
+    }
+    if (!canManageMatch(req.auth, match)) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
 
     const existingQuestion = await Question.findOne({
       where: { name: req.body.name, match_id: req.body.match_id },
     });
-    if (existingQuestion)
+    if (existingQuestion) {
       return res.status(400).json({ message: "Duplicated name" });
+    }
+
+    // The auto-reset interval has its own endpoint (and its own bounds check);
+    // accepting it here let a create set an out-of-range interval, or a due
+    // time in the past that fires on the very next cron tick.
+    stripCreateOnlyFields(req.body);
 
     // Auto-increment order based on existing questions in the same match
     const maxOrderQuestion = await Question.findOne({
@@ -469,6 +752,10 @@ const createQuestion = async (req, res) => {
       attributes: ["order"],
     });
     req.body.order = (maxOrderQuestion?.order ?? -1) + 1;
+
+    const raw = req.body.raw_questions;
+    const rosterRefusal = await applyMatchRoster(raw, match);
+    if (rosterRefusal) return res.status(400).json({ message: rosterRefusal });
 
     // let optimalAnswers = [];
 
@@ -527,44 +814,48 @@ const createQuestion = async (req, res) => {
     //   });
     // }
 
-    const raw = req.body.raw_questions;
     const { isPractice, noReset } = prepareRawQuestion(raw, match);
 
-    req.body.question_data = JSON.stringify(raw);
-    const question = await Question.create(req.body, { transaction });
+    // Nothing below may refuse the request: from here on every exit path goes
+    // through the transaction's commit or its rollback.
+    const transaction = await sequelize.transaction();
+    const createdGameIds = [];
+    try {
+      req.body.question_data = JSON.stringify(raw);
+      const question = await Question.create(req.body, { transaction });
 
-    const authHeader = engineAuthHeader();
-    await initEngineGames(
-      question.id,
-      raw,
-      isPractice,
-      noReset,
-      authHeader,
-      createdGameIds,
-    );
+      const authHeader = engineAuthHeader();
+      await initEngineGames(
+        question.id,
+        raw,
+        isPractice,
+        noReset,
+        authHeader,
+        createdGameIds,
+      );
 
-    await transaction.commit();
+      await transaction.commit();
 
-    return res.status(201).json(question);
+      return res.status(201).json(question);
+    } catch (error) {
+      // `commit()` itself can fail, and it marks the transaction finished
+      // before it throws -- an unguarded rollback then throws "already
+      // finished" from inside the catch and the engine cleanup below is never
+      // reached, stranding the games it had created.
+      await rollbackQuietly(transaction);
+      // The row is gone but any engine game already created is not -- /game/init
+      // runs outside the transaction. A plain-practice question inits one game
+      // per team, so a failure on team 3 would otherwise strand teams 1-2's games
+      // and make the admin's next attempt collide with them on game_id.
+      await deleteGamesQuietly(createdGameIds);
+      // Surface the game service's own status (e.g. 400 = config validation
+      // failed: bad day/steps/fuel/spot bounds) instead of masking it as 500,
+      // so the admin sees WHY the board was rejected.
+      const status = error.response?.statusCode || 500;
+      return res.status(status).json({ message: engineErrorMessage(error) });
+    }
   } catch (error) {
-    await transaction.rollback();
-    // The rolled-back INSERT still consumed the question's AUTO_INCREMENT id
-    // (InnoDB never returns it), so a board rejected by /game/init would make
-    // the next question -- and the game_id it becomes -- skip a number.
-    await resyncAutoIncrement(Question);
-    // The row is gone but any engine game already created is not -- /game/init
-    // runs outside the transaction. A plain-practice question inits one game
-    // per team, so a failure on team 3 would otherwise strand teams 1-2's games
-    // and make the admin's next attempt collide with them on game_id.
-    await Promise.all(
-      createdGameIds.map((gameId) => deleteGameQuietly(gameId, engineAuthHeader())),
-    );
-    // Surface the game service's own status (e.g. 400 = config validation
-    // failed: bad day/steps/fuel/spot bounds) instead of masking it as 500,
-    // so the admin sees WHY the board was rejected.
-    const status = error.response?.statusCode || 500;
-    let errMsg = error.response ? error.response.body : error.message;
-    return res.status(status).json({ message: errMsg });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -576,6 +867,11 @@ const MAX_BULK_QUESTIONS = 50;
 
 // The question's OWN columns. Everything else in an entry is board data --
 // that is what lets a /game/init payload be pasted in flat (see splitEntry).
+//
+// `auto_reset_*` are listed here even though a create REFUSES to set them
+// (stripCreateOnlyFields, applied after this pick): recognising them as the
+// question's own fields is what stops a stray one being mistaken for board
+// data and forwarded to /game/init.
 const QUESTION_FIELDS = [
   "name",
   "description",
@@ -604,11 +900,21 @@ const pickQuestionFields = (obj) =>
  * otherwise whatever remains of the entry once the question's columns are
  * removed -- so a generated /game/init payload can be pasted in as-is and just
  * given a `name`, with no re-nesting.
+ *
+ * CREATE_ONLY_FORBIDDEN keys are neither: they are dropped here rather than
+ * counted as board data. Otherwise a NESTED entry that carried a stray `id`
+ * (say, a row copied out of the API) had `{id: ...}` mistaken for its inline
+ * board, which both shadowed `defaults.raw_questions` and got the entry
+ * rejected for having no map -- and, worse, would have sent that `id` on to
+ * /game/init as part of the board.
  */
 const splitEntry = (entry) => {
   const inline = {};
   for (const [k, v] of Object.entries(entry || {})) {
-    if (k !== "raw_questions" && !QUESTION_FIELDS.includes(k)) inline[k] = v;
+    if (k === "raw_questions") continue;
+    if (QUESTION_FIELDS.includes(k)) continue;
+    if (CREATE_ONLY_FORBIDDEN.includes(k)) continue;
+    inline[k] = v;
   }
   return {
     meta: pickQuestionFields(entry),
@@ -652,6 +958,7 @@ const splitEntry = (entry) => {
  * service's own status, so a bad board reports which one it was.
  */
 const bulkCreateQuestions = async (req, res) => {
+  try {
   const body = req.body || {};
   const items = Array.isArray(body) ? body : body.questions;
   const defaults = Array.isArray(body)
@@ -674,7 +981,18 @@ const bulkCreateQuestions = async (req, res) => {
 
   const merged = items.map((item) => {
     const { meta, raw } = splitEntry(item);
-    return { ...defaults, ...meta, raw_questions: raw ?? defaultRaw };
+    // Same rule as the single create: the auto-reset interval and the id are
+    // not the request body's to set (see CREATE_ONLY_FORBIDDEN).
+    return stripCreateOnlyFields({
+      ...defaults,
+      ...meta,
+      // DEEP COPY. `defaults.raw_questions` is ONE object shared by every entry
+      // that does not bring its own board, and both prepareRawQuestion and
+      // applyMatchRoster MUTATE the board they are given -- so every such entry
+      // ended up stored with (and initialised from) whatever the last entry's
+      // match wrote into it, i.e. the wrong roster and the wrong practice flags.
+      raw_questions: cloneBoard(raw ?? defaultRaw),
+    });
   });
 
   // -- Pre-flight ---------------------------------------------------------
@@ -686,7 +1004,7 @@ const bulkCreateQuestions = async (req, res) => {
     const q = merged[i];
     const at = `questions[${i}]`;
     if (!q.match_id) {
-      return res.status(406).json({ message: `${at}: match_id invalid` });
+      return res.status(400).json({ message: `${at}: match_id is required` });
     }
     if (typeof q.name !== "string" || !q.name.trim()) {
       return res.status(400).json({ message: `${at}: name is required` });
@@ -720,7 +1038,7 @@ const bulkCreateQuestions = async (req, res) => {
   for (const matchId of indexesByMatch.keys()) {
     const match = await Match.findByPk(matchId);
     if (!match) {
-      return res.status(406).json({ message: `match_id ${matchId} invalid` });
+      return res.status(400).json({ message: `match_id ${matchId} invalid` });
     }
     if (!canManageMatch(req.auth, match)) {
       return res.status(403).json({ message: `Not allowed: match "${match.name}"` });
@@ -738,6 +1056,19 @@ const bulkCreateQuestions = async (req, res) => {
       return res
         .status(400)
         .json({ message: `Duplicated name "${clash.name}"` });
+    }
+  }
+
+  // Point every board at its match's real roster (see applyMatchRoster).
+  // Still pre-flight: a board with no usable agents template, or a match with
+  // an empty roster, refuses the batch before anything is created.
+  for (let i = 0; i < merged.length; i++) {
+    const refusal = await applyMatchRoster(
+      merged[i].raw_questions,
+      matchesById.get(merged[i].match_id),
+    );
+    if (refusal) {
+      return res.status(400).json({ message: `questions[${i}]: ${refusal}` });
     }
   }
 
@@ -800,26 +1131,30 @@ const bulkCreateQuestions = async (req, res) => {
       questions: created,
     });
   } catch (error) {
-    await transaction.rollback();
-    // Rolled-back INSERTs still burned their AUTO_INCREMENT ids (see
-    // createQuestion), and the engine games are outside the transaction, so
-    // both need undoing by hand before the admin retries.
-    await resyncAutoIncrement(Question);
-    await Promise.all(
-      createdGameIds.map((gameId) => deleteGameQuietly(gameId, authHeader)),
-    );
+    // Guarded: a failing commit() has already marked the transaction finished,
+    // and an unguarded rollback would throw out of this catch before the
+    // engine games below were cleaned up.
+    await rollbackQuietly(transaction);
+    // The engine games are created OUTSIDE the transaction, so the rollback
+    // does not touch them -- they have to be undone by hand before the admin
+    // retries, or the next attempt collides with them on game_id.
+    await deleteGamesQuietly(createdGameIds);
 
     // Forward the game service's own status (400 = board config rejected) so
     // the admin sees WHY, not a blanket 500.
     const status = error.response?.statusCode || 500;
-    const errMsg = error.response ? error.response.body : error.message;
     return res.status(status).json({
-      message: errMsg,
+      message: engineErrorMessage(error),
       failed_index: failedIndex,
       failed_name: failedIndex === null ? null : merged[failedIndex]?.name,
       created_count: 0,
       rolled_back_games: createdGameIds.length,
     });
+  }
+  } catch (error) {
+    // Anything thrown BEFORE the transaction opened (a DB error in the
+    // pre-flight queries): a 500, never a request left hanging.
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -836,31 +1171,39 @@ const getTime = (req, res) => {
 // no equivalent here; disabled rather than left to fail against a
 // nonexistent /board endpoint.
 const regenerateQuestion = async (req, res) => {
-  const { id } = req.params;
-  const question = await Question.findByPk(id);
+  try {
+    const { id } = req.params;
+    const question = await Question.findByPk(id);
 
-  if (!question) {
-    return res.status(404).json({ message: "Question not found" });
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    return res.status(400).json({
+      message:
+        "Regenerating a HEXUDON question's map is not supported. Delete and recreate the question instead.",
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
   }
-
-  return res.status(400).json({
-    message:
-      "Regenerating a HEXUDON question's map is not supported. Delete and recreate the question instead.",
-  });
 };
 
 const regenerateWithParams = async (req, res) => {
-  const { id } = req.params;
-  const question = await Question.findByPk(id);
+  try {
+    const { id } = req.params;
+    const question = await Question.findByPk(id);
 
-  if (!question) {
-    return res.status(404).json({ message: "Question not found" });
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    return res.status(400).json({
+      message:
+        "Regenerating a HEXUDON question's map is not supported. Delete and recreate the question instead.",
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
   }
-
-  return res.status(400).json({
-    message:
-      "Regenerating a HEXUDON question's map is not supported. Delete and recreate the question instead.",
-  });
 };
 
 const getOptimalAnswers = async (req, res) => {
@@ -906,5 +1249,6 @@ module.exports = {
   regenerateWithParams,
   getOptimalAnswers,
   getTime,
+  resetQuestion,
   setQuestionAutoReset,
 };

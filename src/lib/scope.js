@@ -1,5 +1,7 @@
 /**
- * Who may touch what. Three levels, read off the JWT payload (`req.auth`):
+ * Who may touch what. Three levels, read off `req.auth` -- which
+ * middleware/authenticate.js rebuilds from the ACCOUNT ROW on every request
+ * (the JWT only says which row), so a demotion takes effect at once:
  *
  *   superadmin   is_admin === true. Unscoped.
  *   manager      group_role === "manager" with a group_id. Scoped to that ONE
@@ -48,6 +50,23 @@ const teamFitsMatch = (team, match) =>
   match?.group_id == null || sameGroup(team?.group_id, match.group_id);
 
 /**
+ * May this ACCOUNT be rostered as a player?
+ *
+ * Staff accounts may not. A superadmin's and a group manager's tokens are
+ * treated as ADMINS of the games they can reach (the engine reads `is_admin`
+ * and `group_role` straight off the JWT), so rostering one as a competitor puts
+ * an account into the match that can also reset, delete and fully inspect it --
+ * and the engine's team-only endpoints (`/game/config`, `/game/day`) refuse an
+ * admin token outright, so such a "player" could never submit a day anyway.
+ * A manager is a dedicated non-playing account by design (see the README).
+ *
+ * Takes a Team ROW (not req.auth): it is the account being rostered that is
+ * being judged, never the caller.
+ */
+const isPlayerAccount = (team) =>
+  !!team && !team.is_admin && team.group_role !== "manager";
+
+/**
  * May `auth` move this account INTO group `groupId`?
  * Superadmin: always. Manager: only into its own group, and only an account
  * that belongs to no group yet -- claiming another school's team is not a
@@ -78,6 +97,7 @@ module.exports = {
   managerGroupId,
   canManageMatch,
   canManageGroup,
+  isPlayerAccount,
   teamFitsMatch,
   canAddToGroup,
   canRemoveFromGroup,

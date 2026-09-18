@@ -61,7 +61,12 @@ const useController = (Model) => {
           message: `${Model.name} not found`,
         });
       }
-      await data.update(req.body);
+      // The row to edit is named by the URL, never by the body. A `id` in the
+      // body would re-key the row (and, for a question, desync it from the
+      // engine game that carries its id). Callers narrow the rest of the body
+      // per model; this is the one field no caller may ever allow.
+      const { id: _ignoredId, ...body } = req.body || {};
+      await data.update(body);
       return res.status(200).json({
         id,
       });

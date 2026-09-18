@@ -42,9 +42,9 @@
           {
             "name": "id",
             "in": "path",
-            "description": "ID of question",
+            "description": "ID of question (UUID)",
             "required": true,
-            "type": "integer"
+            "type": "string"
           }
         ],
         "tags": [
@@ -57,11 +57,71 @@
               "$ref": "#/definitions/Question"
             }
           },
+          "403": {
+            "description": "Not allowed"
+          },
           "404": {
             "description": "Not found"
           },
-          "405": {
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Edit a question (staff; a manager only in its own group's matches)",
+        "description": "Only name, description, order, difficulty and weight are read; every other field in the body is dropped. The board (question_data / raw_questions) is immutable once created, and the auto-reset interval has its own route. difficulty/weight are the organiser's own labels for weighting questions by hand -- no scoring code reads them; send null (or \"\") to clear either.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question (UUID)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "integer"
+                },
+                "difficulty": {
+                  "type": "string",
+                  "description": "Organiser label, max 32 chars; null clears it."
+                },
+                "weight": {
+                  "type": "number",
+                  "description": "Organiser coefficient; null clears it."
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "Question"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully"
+          },
+          "400": {
+            "description": "order is not an integer, name is empty, or the body tried to change the board"
+          },
+          "403": {
             "description": "Not allowed"
+          },
+          "404": {
+            "description": "Not found"
           },
           "500": {
             "description": "Server error"
@@ -182,25 +242,19 @@
             }
           },
           "400": {
-            "description": "Pre-flight rejection, naming the entry: empty/oversized list, missing name, no board, or a duplicated name (within the batch or against a stored question). Nothing was created.",
+            "description": "Pre-flight rejection, naming the entry: empty/oversized list, missing name, missing/unknown match_id, no board, a board whose teams[] carries no agents template, a match with an empty roster, or a duplicated name (within the batch or against a stored question). Nothing was created.",
             "schema": {
               "$ref": "#/definitions/BulkCreateError"
             }
           },
-          "406": {
-            "description": "An entry has no match_id. Nothing was created.",
-            "schema": {
-              "$ref": "#/definitions/BulkCreateError"
-            }
+          "403": {
+            "description": "Not allowed (admin required)"
           },
           "422": {
             "description": "The game service rejected a board (its own status is forwarded, not masked as 500). Everything was rolled back.",
             "schema": {
               "$ref": "#/definitions/BulkCreateError"
             }
-          },
-          "405": {
-            "description": "Not allowed (admin required)"
           },
           "500": {
             "description": "Server error"
@@ -315,11 +369,11 @@
               "$ref": "#/definitions/Answer"
             }
           },
+          "403": {
+            "description": "Not allowed"
+          },
           "404": {
             "description": "Not found"
-          },
-          "405": {
-            "description": "Not allowed"
           },
           "500": {
             "description": "Server error"
@@ -382,7 +436,7 @@
               }
             }
           },
-          "405": {
+          "403": {
             "description": "Not staff (superadmin or group manager)"
           },
           "500": {
@@ -431,7 +485,7 @@
           "400": {
             "description": "Missing or duplicated name"
           },
-          "405": {
+          "403": {
             "description": "Not superadmin"
           }
         }
@@ -501,7 +555,7 @@
           "400": {
             "description": "Duplicated name"
           },
-          "405": {
+          "403": {
             "description": "Not superadmin"
           }
         }
@@ -525,11 +579,11 @@
           "200": {
             "description": "Deleted"
           },
+          "403": {
+            "description": "Not superadmin"
+          },
           "404": {
             "description": "Not found"
-          },
-          "405": {
-            "description": "Not superadmin"
           }
         }
       }
@@ -567,7 +621,7 @@
               }
             }
           },
-          "405": {
+          "403": {
             "description": "Not staff (superadmin or group manager)"
           },
           "500": {
@@ -670,7 +724,7 @@
               }
             }
           },
-          "405": {
+          "403": {
             "description": "Not staff (superadmin or group manager)"
           },
           "500": {
@@ -710,6 +764,215 @@
           },
           "404": {
             "description": "Team is not in this group"
+          }
+        }
+      }
+    },
+    "/question/{id}/reset": {
+      "post": {
+        "summary": "Replay a question from Day 1 (staff; a manager only in its own group's matches)",
+        "description": "Resets EVERY engine game behind the question with the service admin token (the bare question id, plus `{id}:{team_id}` for per-team practice), then re-anchors question_data.startsAt (and shifts endsAt by the same delta) so this service stops serving the old schedule -- which is what the board gate is read off. startsAt defaults to now + agent_selection_time_limit + 60 s. Practice questions are self-paced: no startsAt is sent and nothing is re-anchored.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of question (UUID)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "startsAt": {
+                  "type": "integer",
+                  "description": "New Day-1 time, EPOCH SECONDS. Must be at least now + agent_selection_time_limit."
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "Question"
+        ],
+        "responses": {
+          "200": {
+            "description": "Every game was reset",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "startsAt": {
+                  "type": "integer",
+                  "description": "the persisted Day 1, or null for a practice question"
+                },
+                "reset": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "failed": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "missing": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "game ids the engine does not have (normal for the bare id of a per-team practice question)"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "startsAt is not epoch seconds, or is early enough that the agent-kind window would already be closed"
+          },
+          "403": {
+            "description": "Not allowed"
+          },
+          "404": {
+            "description": "Question not found"
+          },
+          "500": {
+            "description": "Server error"
+          },
+          "502": {
+            "description": "Some games could not be reset; `failed` names them. The new startsAt is still persisted if at least one succeeded."
+          }
+        }
+      }
+    },
+    "/team/password": {
+      "put": {
+        "summary": "Change your own password",
+        "description": "The current password must be supplied: a token alone is not enough to take over the account it authenticates. The bootstrap admin (id 0) has no row and is refused with 400.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "current_password",
+                "password"
+              ],
+              "properties": {
+                "current_password": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "Team"
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "current_password missing or incorrect, password missing, or the caller is the bootstrap admin"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Team not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/team/signin": {
+      "post": {
+        "summary": "Sign in",
+        "description": "An unknown account and a wrong password answer identically (401 \"Invalid credentials\"), so the endpoint cannot be used to enumerate account names.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "account",
+                "password"
+              ],
+              "properties": {
+                "account": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "Team"
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed in",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "is_admin": {
+                  "type": "boolean"
+                },
+                "group_id": {
+                  "type": "integer"
+                },
+                "group_role": {
+                  "type": "string"
+                },
+                "token": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "500": {
+            "description": "Server error"
           }
         }
       }

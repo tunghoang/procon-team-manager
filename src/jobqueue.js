@@ -29,6 +29,9 @@ answerQueue.process(JOB_CONCURRENT, async (job, done) => {
   console.log(`Job ${job.id} starts processing`);
   const { gameId, teamId, answerId } = job.data;
   const answer = await Answer.findByPk(answerId);
+  // The row can be gone by the time the job runs (question deleted, answers
+  // cascaded). Fail the job rather than dereferencing null in both branches.
+  if (!answer) throw new Error(`answer ${answerId} no longer exists`);
   try {
     const state = await got
       .get(`${getServiceApi()}/game/state`, {
@@ -77,6 +80,15 @@ answerQueue.on("succeeded", (job, result) => {
 
 answerQueue.on("failed", (job, err) => {
   console.log(`Job ${job.id} failed with error:`, err.message);
+});
+
+// bee-queue emits "error" for QUEUE-level trouble (Redis unreachable, a lost
+// connection, a Lua script failure) rather than per-job failures. An
+// EventEmitter with no "error" listener throws, which took the WHOLE API
+// process down -- a Redis blip is not a reason to stop serving matches, and
+// this queue only refreshes a dashboard number.
+answerQueue.on("error", (err) => {
+  console.error("answer queue error (ignored):", err?.message || err);
 });
 
 module.exports = { answerQueue, addAnswer };

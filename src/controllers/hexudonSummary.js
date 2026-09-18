@@ -21,17 +21,34 @@ const { managerGroupId, canManageMatch } = require("../lib/scope");
  * manager gets the same views narrowed to its own group's matches.
  */
 
-/** Practice matches run one game PER TEAM (`${questionId}:${teamId}`), so a
- * single /game/result for the question id does not exist for them. Competitive
- * practice (no_reset) and timed matches both have one shared game at the bare
- * question id and are included. */
-const isPerTeamPractice = (question) => {
+/**
+ * Why a question is NOT part of the ranked standings, or null when it is.
+ *
+ * Only PLAIN per-team practice (`is_practice && !no_reset`) is out: it runs one
+ * game PER TEAM (`${questionId}:${teamId}`), so a single /game/result for the
+ * question id does not exist at all.
+ *
+ * COMPETITIVE practice (`no_reset`) IS scored. Its one shared game used to come
+ * back all zeros with `days_submitted: 0` -- `begin_game()` ran before the
+ * teams' agent kinds were stored and play happened on scratch copies -- which
+ * would have shown every rostered team as DNP in last place. The engine now
+ * scores that timeline properly (`Game.competitive_final_result`: a team's score
+ * is the best canonical score it ever put on the board, days owned =
+ * `days_submitted`, flagged `competitive_practice: true`), so the rows are real
+ * and belong in the standings.
+ *
+ * Returns the REASON (a string, truthy) when the question must be skipped, and
+ * null when it is to be scored -- so one call both decides and explains.
+ */
+const isPracticeQuestion = (question) => {
+  let data;
   try {
-    const data = JSON.parse(question.question_data || "{}");
-    return !!data.is_practice && !data.no_reset;
+    data = JSON.parse(question.question_data || "{}");
   } catch {
-    return false;
+    return null;
   }
+  if (!data.is_practice || data.no_reset) return null;
+  return "practice match (one game per team)";
 };
 
 const SCORING_NOTE =
@@ -49,6 +66,29 @@ const MATCH_INCLUDE = [
 ];
 
 /**
+ * How many /game/result calls may be in flight at once.
+ *
+ * Serial was up to ~10 s per question against a slow engine (a 12-question
+ * round could take two minutes and time the browser out); unbounded would burst
+ * one request per question straight through the engine's READ rate limit
+ * (config.py: 5/s, burst 10) and get half of them rejected. Four keeps a big
+ * round quick and stays under the burst.
+ */
+const RESULT_CONCURRENCY = 4;
+
+/** Everything `skipped` says about a question, wherever it is skipped from. */
+const skippedRow = (match, question, reason) => ({
+  question_id: question.id,
+  question_name: question.name,
+  // match_id and question_order so the caller can group and order the skipped
+  // rows the same way it groups the scored ones, instead of matching on names.
+  match_id: match.id,
+  match_name: match.name,
+  question_order: question.order ?? 0,
+  reason,
+});
+
+/**
  * Ask the engine for every listed question's result.
  *
  * Shared by the round and the per-match views so both score off exactly the
@@ -60,15 +100,12 @@ const scoreQuestions = async (pairs) => {
   const authHeader = { Authorization: `Bearer ${serviceAdminToken()}` };
   const scored = [];
   const skipped = [];
-  for (const { match, question } of pairs) {
-    if (isPerTeamPractice(question)) {
-      skipped.push({
-        question_id: question.id,
-        question_name: question.name,
-        match_name: match.name,
-        reason: "practice match (one game per team)",
-      });
-      continue;
+
+  const scoreOne = async ({ match, question }) => {
+    const practiceReason = isPracticeQuestion(question);
+    if (practiceReason) {
+      skipped.push(skippedRow(match, question, practiceReason));
+      return;
     }
     try {
       const result = await got
@@ -76,6 +113,9 @@ const scoreQuestions = async (pairs) => {
           searchParams: { game_id: question.id },
           headers: authHeader,
           timeout: { request: 10000 },
+          // got retries GETs twice by default, so one hung game cost 3 x the
+          // timeout before this view gave up on it.
+          retry: { limit: 0 },
         })
         .json();
       scored.push({
@@ -90,20 +130,42 @@ const scoreQuestions = async (pairs) => {
         // nothing here applies them.
         difficulty: question.difficulty ?? null,
         weight: question.weight ?? null,
+        // The match ROSTER, so a team the engine never ranked still takes this
+        // match's last place instead of vanishing (lib/hexudonSummary.js).
+        roster: (match.teams || []).map((team) => String(team.id)),
         result,
       });
     } catch (error) {
-      skipped.push({
-        question_id: question.id,
-        question_name: question.name,
-        match_name: match.name,
-        reason:
+      skipped.push(
+        skippedRow(
+          match,
+          question,
           error.response?.statusCode === 404
             ? "no game registered on the engine"
             : `engine error: ${error.response?.statusCode || error.message}`,
-      });
+        ),
+      );
     }
-  }
+  };
+
+  // A fixed pool of workers over one shared cursor.
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < pairs.length) {
+      const pair = pairs[cursor++];
+      await scoreOne(pair);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(RESULT_CONCURRENCY, pairs.length) }, worker),
+  );
+
+  // The pool finishes out of order; put both lists back in the caller's order
+  // so the standings columns and the export sheets stay stable.
+  const rank = new Map(pairs.map((pair, index) => [pair.question.id, index]));
+  const byInput = (a, b) => rank.get(a.question_id) - rank.get(b.question_id);
+  scored.sort(byInput);
+  skipped.sort(byInput);
   return { scored, skipped };
 };
 
@@ -245,7 +307,13 @@ const exportRoundHexudonSummary = async (req, res) => {
     rows.push(["Scoring", summary.scoring]);
     rows.push([
       "DNP",
-      "did not compete (no agent kinds chosen) - scored as that match's last place",
+      // The old wording ("no agent kinds chosen") named the wrong cause: a team
+      // that missed the agent-kind window is defaulted to all-patrol by the
+      // engine and plays on, so it is ranked on what it scored. DNP is strictly
+      // "answered no day at all".
+      "did not submit any day (days_submitted = 0) - scored as that match's " +
+        "last place; a missed agent-kind window still competes (all-patrol " +
+        "default) and keeps the position it earned",
     ]);
     rows.push(["-", "not on that match's roster - the match does not count"]);
     XLSX.utils.book_append_sheet(
@@ -289,9 +357,9 @@ const exportRoundHexudonSummary = async (req, res) => {
     );
 
     if (summary.skipped.length) {
-      const skipped = [["Match", "Question", "Reason"]];
+      const skipped = [["Match", "Question", "#", "Reason"]];
       summary.skipped.forEach((s) =>
-        skipped.push([s.match_name, s.question_name, s.reason])
+        skipped.push([s.match_name, s.question_name, s.question_order, s.reason])
       );
       XLSX.utils.book_append_sheet(
         wb,
@@ -316,6 +384,9 @@ const exportRoundHexudonSummary = async (req, res) => {
 };
 
 module.exports = {
+  // Exported for hexudonSummary.test.js: which questions are ranked at all is
+  // a competition rule, not an implementation detail.
+  isPracticeQuestion,
   fetchRoundSummary,
   fetchMatchSummary,
   getRoundHexudonSummary,

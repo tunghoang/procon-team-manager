@@ -52,6 +52,23 @@ assert.strictEqual(s.teamFitsMatch({ id: 21, group_id: 2 }, groupMatch), false);
 assert.strictEqual(s.teamFitsMatch(loner, organiserMatch), true, "organiser matches take anyone");
 assert.strictEqual(s.teamFitsMatch(member, organiserMatch), true);
 
+// Only ordinary accounts may be rostered: a staff token administers the game
+// rather than playing it, and the engine's team-only endpoints refuse it.
+assert.strictEqual(s.isPlayerAccount(member), true);
+assert.strictEqual(s.isPlayerAccount(loner), true);
+assert.strictEqual(s.isPlayerAccount({ id: 11, group_role: "member" }), true);
+assert.strictEqual(s.isPlayerAccount(manager), false, "a group manager never plays");
+assert.strictEqual(
+  s.isPlayerAccount({ id: 7, is_admin: true }),
+  false,
+  "a superadmin never plays",
+);
+assert.strictEqual(
+  s.isPlayerAccount({ id: 8, is_admin: true, group_role: "member" }),
+  false,
+);
+assert.strictEqual(s.isPlayerAccount(null), false);
+
 // --- group membership --------------------------------------------------------
 assert.strictEqual(s.canManageGroup(admin, 2), true);
 assert.strictEqual(s.canManageGroup(manager, 1), true);

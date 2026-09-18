@@ -5,6 +5,8 @@
  * the side-effecting half lives in autoReset.js.
  */
 
+const { selectionSecondsOf } = require("./questionSchedule");
+
 /** Bounds for the admin-set interval: a minute apart at the fastest, a day at the slowest. */
 const MIN_MINUTES = 1;
 const MAX_MINUTES = 1440;
@@ -37,6 +39,11 @@ const nextDueSec = (minutes, fromMs = Date.now()) =>
  * pre-match window in `[base - limit, base)`, so resetting to `now` would hand
  * every team an already-closed window (and no time with the board) and default
  * them all to all-patrol. Giving that phase back is the point of replaying.
+ *
+ * A board that declares NO window falls back to the shared default
+ * (questionSchedule.DEFAULT_SELECTION_SECONDS, 60 s) rather than to 0, which is
+ * what the manual reset route offers -- the two paths must not disagree about
+ * how much pre-match time a replay gets. An explicit 0 is still honoured.
  */
 const autoResetTargets = (question, teamIds = [], nowMs = Date.now()) => {
   const data = parseQuestionData(question);
@@ -52,7 +59,7 @@ const autoResetTargets = (question, teamIds = [], nowMs = Date.now()) => {
   if (isPractice) {
     return [{ gameId: String(question.id), startsAt: undefined }];
   }
-  const selectionSeconds = Number(data.agent_selection_time_limit) || 0;
+  const selectionSeconds = selectionSecondsOf(data);
   return [
     {
       gameId: String(question.id),

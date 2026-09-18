@@ -4,7 +4,11 @@ const XLSX = require("xlsx");
 const useController = require("../lib/useController");
 const { Answer, Question, Team, Match, Round } = require("../models");
 const { getAll, create, remove } = useController(Answer);
-const { checkValidAnswer, getServiceApi } = require("../lib/common");
+const {
+  checkValidAnswer,
+  engineErrorMessage,
+  getServiceApi,
+} = require("../lib/common");
 const { addAnswer } = require("../jobqueue");
 
 const include = [
@@ -256,7 +260,9 @@ const createAnswer = async (req, res) => {
       return res.status(404).json({ message: "Question not found" });
 
     const message = await checkValidAnswer(question.match, teamId);
-    if (message) return res.status(405).json({ message });
+    // 403, not 405: "not on this match" / "match inactive" / "out of time" are
+    // all refusals of an otherwise well-formed POST to an existing route.
+    if (message) return res.status(403).json({ message });
 
     // rate limit
     const RATE_WINDOW = 3 * 1000; // 3 seconds
@@ -343,10 +349,11 @@ const createAnswer = async (req, res) => {
     // Propagate the game service's own status when it rejected the request
     // (e.g. 409 = invalid plan, 404 = game not found, 403 = team not in game)
     // instead of masking everything as a 500 -- the client needs to tell a
-    // bad submission apart from a real server error.
+    // bad submission apart from a real server error. The engine's body is
+    // parsed for its `detail` rather than forwarded as raw JSON text, which is
+    // what teams were seeing in their toasts.
     const status = error.response?.statusCode || 500;
-    const errMsg = error.response ? error.response.body : error.message;
-    return res.status(status).json({ message: errMsg });
+    return res.status(status).json({ message: engineErrorMessage(error) });
   }
 };
 

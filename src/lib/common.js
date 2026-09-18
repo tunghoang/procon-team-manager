@@ -88,6 +88,67 @@ const resyncAutoIncrement = async (Model) => {
   }
 };
 
+/**
+ * A HUMAN-READABLE message out of a failed GAME-SERVICE call.
+ *
+ * Only for errors that came back from an engine request: callers that make no
+ * engine call must use `error.message`, or a DB error would be dressed up as an
+ * engine one.
+ *
+ * FastAPI reports errors as `{"detail": "..."}`, or as a pydantic array
+ * (`[{loc, msg, ...}]`) for a 422. got hands us the raw response body, and
+ * forwarding that verbatim put `{"detail":"game not found"}` -- braces, quotes
+ * and all -- into the admin's toast.
+ *
+ * Anything that is not that JSON shape is NOT passed through as-is: a proxy or
+ * gateway in front of the engine answers with an HTML error page, and a whole
+ * `<!doctype html>...` document in a toast tells the admin nothing. HTML (and
+ * an over-long body) collapses to `HTTP <status>`.
+ */
+const ENGINE_MESSAGE_MAX = 300;
+
+const engineErrorMessage = (error) => {
+  const body = error?.response?.body;
+  const status = error?.response?.statusCode;
+  const httpFallback = status ? `HTTP ${status}` : error?.message;
+  if (body == null || body === "") return httpFallback || error?.message;
+
+  let parsed = null;
+  let text = "";
+  if (typeof body === "object") {
+    parsed = body;
+  } else {
+    text = String(body).trim();
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  if (parsed && typeof parsed === "object") {
+    const detail = parsed.detail;
+    if (typeof detail === "string" && detail) return detail;
+    if (Array.isArray(detail)) {
+      const joined = detail
+        .map((item) =>
+          item?.loc ? `${(item.loc || []).join(".")}: ${item.msg}` : item?.msg,
+        )
+        .filter(Boolean)
+        .join("; ");
+      if (joined) return joined;
+    }
+    if (typeof parsed.message === "string" && parsed.message) return parsed.message;
+    return httpFallback || error?.message;
+  }
+
+  // Not JSON: an HTML error page, or something long enough to be one.
+  if (!text || text.startsWith("<") || text.length > ENGINE_MESSAGE_MAX) {
+    return httpFallback || error?.message;
+  }
+  return text;
+};
+
 let loadTurn = 0;
 const getServiceApi = (mode) => {
   // Load balancing
@@ -107,6 +168,7 @@ const getServiceApi = (mode) => {
 module.exports = {
   getFilter,
   checkValidAnswer,
+  engineErrorMessage,
   getServiceApi,
   serviceAdminToken,
   resyncAutoIncrement,
