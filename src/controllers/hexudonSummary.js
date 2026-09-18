@@ -83,6 +83,9 @@ const scoreQuestions = async (pairs) => {
         question_name: question.name,
         match_id: match.id,
         match_name: match.name,
+        // Lets the UI number a match's questions when their names carry no
+        // <round>.<group>.<match> tag (procon-react utils/group-standings.js).
+        question_order: question.order ?? 0,
         // Passed through untouched for whoever weights the questions by hand;
         // nothing here applies them.
         difficulty: question.difficulty ?? null,
